@@ -1,7 +1,6 @@
 // Control UI tests cover plugin catalog browsing and lifecycle mutations.
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { createRequireRecord } from "openclaw/plugin-sdk/test-fixtures";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PluginsSearchResult } from "../../../../packages/gateway-protocol/src/schema/plugins.ts";
@@ -18,8 +17,6 @@ import {
   resolvePlaywrightChromiumExecutablePath,
   startControlUiE2eServer,
   type ControlUiE2eServer,
-  type MockGatewayControls,
-  type MockGatewayRequest,
 } from "../../test-helpers/control-ui-e2e.ts";
 
 const chromiumExecutablePath = resolvePlaywrightChromiumExecutablePath(chromium.executablePath());
@@ -306,33 +303,6 @@ function readOnlyConnectResponse() {
     },
     type: "hello-ok",
   };
-}
-
-const requireRecord = createRequireRecord("record", "expected-object-value");
-
-function requestParams(request: MockGatewayRequest): Record<string, unknown> {
-  return requireRecord(request.params);
-}
-
-async function waitForNextRequest(
-  gateway: MockGatewayControls,
-  method: string,
-  previousCount: number,
-): Promise<MockGatewayRequest> {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    const requests = await gateway.getRequests(method);
-    if (requests.length > previousCount) {
-      const request = requests.at(-1);
-      if (request) {
-        return request;
-      }
-    }
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 10);
-    });
-  }
-  throw new Error(`Timed out waiting for the next ${method} request`);
 }
 
 async function captureScreenshot(page: Page, name: string): Promise<void> {
