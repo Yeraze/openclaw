@@ -23,9 +23,217 @@
   margin-top: 0;
 }
 
+.plugins-hub-header .hub-page-header__tabs {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plugins-hub-header .plugins-tabs {
+  flex: 1 1 auto;
+}
+
+.plugins-hub-header__secondary {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 400px) {
   .content-header.hub-page-header.plugins-hub-header {
     gap: var(--space-4);
+  }
+}
+
+/* ---------- Your plugins ---------- */
+
+.your-plugins {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.your-plugins__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.your-plugins__header h2,
+.your-plugins__header p,
+.your-plugins-card h3,
+.your-plugins-card p {
+  margin: 0;
+}
+
+.your-plugins__header h2 {
+  color: var(--text-strong);
+  font-size: var(--control-ui-text-lg);
+}
+
+.your-plugins__header p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.your-plugins__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.your-plugins__search {
+  width: min(420px, 100%);
+}
+
+.your-plugins__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.your-plugins-card {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  cursor: var(--cursor-action);
+  transition:
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+
+.your-plugins-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.your-plugins-card__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.your-plugins-card__art {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.your-plugins-card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.your-plugins-card__art img.plugins-icon {
+  object-fit: contain;
+  padding: 7px;
+}
+
+.your-plugins-card__art--fallback {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--plugins-art-a), var(--plugins-art-b));
+  color: rgb(255 255 255 / 92%);
+  font-family: var(--mono);
+  font-size: var(--control-ui-text-sm);
+  font-weight: 700;
+}
+
+.your-plugins-card__identity {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.your-plugins-card__identity h3,
+.your-plugins-card__identity p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.your-plugins-card__identity h3 {
+  white-space: nowrap;
+}
+
+.your-plugins-card__link {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  cursor: var(--cursor-action);
+  font: inherit;
+  font-size: var(--control-ui-text-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.your-plugins-card__link:hover,
+.your-plugins-card__link:focus-visible {
+  color: var(--accent);
+}
+
+.your-plugins-card__identity p {
+  display: -webkit-box;
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.your-plugins-card__toggle {
+  align-self: start;
+}
+
+.your-plugins-card__error,
+.your-plugins-card__message {
+  grid-column: 1 / -1;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  color: var(--danger);
+  font-size: var(--control-ui-text-xs);
+  line-height: 1.4;
+}
+
+.your-plugins-card__message--success {
+  color: var(--ok);
+}
+
+.your-plugins-card__message--warning {
+  color: var(--warn);
+}
+
+.your-plugins__more {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .your-plugins__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .your-plugins__grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

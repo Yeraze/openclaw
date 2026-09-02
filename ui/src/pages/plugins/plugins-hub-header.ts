@@ -1,4 +1,4 @@
-import { html, type TemplateResult } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 import { subtitleForRoute, titleForRoute } from "../../app-navigation.ts";
 import { renderLearnMoreLink } from "../../components/settings-ui.ts";
 import { renderPluginsHubTabs, type PluginsHubTab } from "./plugins-hub.ts";
@@ -8,6 +8,10 @@ const PLUGINS_DOCS_URL = "https://docs.openclaw.ai/plugins/manage-plugins";
 type PluginsHubHeaderProps = {
   active: PluginsHubTab;
   onSelect: (tab: PluginsHubTab) => void;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 export function renderPluginsHubHeader(props: PluginsHubHeaderProps): TemplateResult {
@@ -23,6 +27,15 @@ export function renderPluginsHubHeader(props: PluginsHubHeaderProps): TemplateRe
       </div>
       <div class="hub-page-header__tabs">
         ${renderPluginsHubTabs({ active: props.active, onSelect: props.onSelect })}
+        ${props.secondaryAction
+          ? html`<button
+              type="button"
+              class="btn btn--sm plugins-hub-header__secondary"
+              @click=${props.secondaryAction.onClick}
+            >
+              ${props.secondaryAction.label}
+            </button>`
+          : nothing}
       </div>
     </section>
   `;

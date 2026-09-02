@@ -268,6 +268,7 @@ describe("subtitleForRoute", () => {
       agents: "Workspaces, tools, identities.",
       skills: "Skills and API keys.",
       plugins: "Install and manage optional capabilities.",
+      "plugin-settings": "Install and manage optional capabilities.",
       "skill-workshop":
         "The skills your agent uses now, suggestions waiting for review, and past decisions.",
       devices: "Paired devices, pairing approvals, and exec bindings.",
