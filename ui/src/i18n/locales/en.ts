@@ -3066,6 +3066,7 @@ export const en: TranslationMap & {
     enableNamed: "Enable {name}",
     disableNamed: "Disable {name}",
     setupRequired: "Setup required",
+    setupRequiredEnableBlocked: "Configure this plugin before enabling it.",
     searchInstalledPlaceholder: "Search installed plugins",
     showAllPlugins: "Show all {count}",
     backToYourPlugins: "Back",

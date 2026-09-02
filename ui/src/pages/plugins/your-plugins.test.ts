@@ -269,6 +269,36 @@ describe("renderYourPlugins", () => {
     );
   });
 
+  it("keeps setup-required plugins disabled until configuration is complete", async () => {
+    const onSetEnabled = vi.fn();
+    const container = mount(
+      baseProps({
+        result: createResult([
+          createPlugin({ id: "needs-setup", name: "Needs Setup", state: "needs-setup" }),
+        ]),
+        onSetEnabled,
+      }),
+    );
+    const toggle = expectDefined(
+      container.querySelector<HTMLElement & { checked: boolean }>("wa-switch"),
+      "setup-required enable switch",
+    );
+    const tooltip = expectDefined(
+      toggle.closest("openclaw-tooltip") as
+        | (HTMLElement & { content?: string; updateComplete: Promise<unknown> })
+        | null,
+      "setup-required reason tooltip",
+    );
+    await tooltip.updateComplete;
+    expect(tooltip.content).toBe("Configure this plugin before enabling it.");
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(toggle.checked).toBe(false);
+    expect(onSetEnabled).not.toHaveBeenCalled();
+  });
+
   it("keeps read-only mutation controls explainable without invoking a mutation or card navigation", async () => {
     const onOpenSettings = vi.fn();
     const onSetEnabled = vi.fn();

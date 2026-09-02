@@ -121,15 +121,19 @@ export type YourPluginsProps = {
 
 function renderToggle(plugin: PluginCatalogItem, rowKey: string, props: YourPluginsProps) {
   const busy = Boolean(props.busy[rowKey]);
+  const blockedReason =
+    plugin.state === "needs-setup"
+      ? t("pluginsPage.setupRequiredEnableBlocked")
+      : props.mutationBlockedReason;
   const toggle = renderSettingsToggle({
     checked: plugin.enabled,
-    disabled: !props.mutationBlockedReason && (!props.canMutate || busy),
+    disabled: !blockedReason && (!props.canMutate || busy),
     ariaLabel: t(plugin.enabled ? "pluginsPage.disableNamed" : "pluginsPage.enableNamed", {
       name: plugin.name,
     }),
-    ariaDisabled: Boolean(props.mutationBlockedReason),
+    ariaDisabled: Boolean(blockedReason),
     onChange: (enabled) => {
-      if (!props.canMutate || busy) {
+      if (blockedReason || !props.canMutate || busy) {
         return false;
       }
       props.onSetEnabled(plugin.id, enabled, rowKey);
@@ -138,7 +142,7 @@ function renderToggle(plugin: PluginCatalogItem, rowKey: string, props: YourPlug
       return false;
     },
   });
-  return renderReasonedDisabledControl(props.mutationBlockedReason, toggle);
+  return renderReasonedDisabledControl(blockedReason, toggle);
 }
 
 function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): TemplateResult {
