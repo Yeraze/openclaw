@@ -28,6 +28,7 @@ function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps 
     onSearchOpenChange: vi.fn(),
     onQueryChange: vi.fn(),
     onRefresh: vi.fn(),
+    settingsHref: (pluginId) => `/settings/plugins/${pluginId}?from=plugins`,
     onOpenSettings: vi.fn(),
     onIconError: vi.fn(),
     onCancelConsent: vi.fn(),
@@ -215,12 +216,10 @@ describe("renderYourPlugins", () => {
     successful.click();
     expect(onOpenSettings).toHaveBeenCalledWith("successful");
 
-    const title = expectDefined(
-      successful.querySelector<HTMLButtonElement>(".your-plugins-card__link"),
-      "plugin title link",
+    expect(successful).toBeInstanceOf(HTMLAnchorElement);
+    expect((successful as HTMLAnchorElement).getAttribute("href")).toBe(
+      "/settings/plugins/successful?from=plugins",
     );
-    title.click();
-    expect(onOpenSettings).toHaveBeenLastCalledWith("successful");
     expect(successful.querySelector("wa-switch")).toBeNull();
 
     const settings = expectDefined(

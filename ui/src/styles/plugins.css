@@ -104,7 +104,7 @@
   gap: var(--space-3);
 }
 
-.your-plugins-card {
+a.your-plugins-card {
   min-width: 0;
   display: grid;
   gap: var(--space-3);
@@ -112,7 +112,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
+  color: inherit;
   cursor: pointer;
+  text-decoration: none;
   transition:
     border-color var(--duration-fast) ease,
     box-shadow var(--duration-fast) ease,
@@ -177,26 +179,14 @@
 }
 
 .your-plugins-card__identity h3 {
-  white-space: nowrap;
-}
-
-.your-plugins-card__link {
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--text-strong);
-  cursor: pointer;
-  font: inherit;
   font-size: var(--control-ui-text-md);
   font-weight: 600;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.your-plugins-card__link:hover,
-.your-plugins-card__link:focus-visible {
+.your-plugins-card:hover .your-plugins-card__identity h3,
+.your-plugins-card:focus-visible .your-plugins-card__identity h3 {
   color: var(--accent);
 }
 

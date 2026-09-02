@@ -604,6 +604,8 @@ class PluginsPage extends OpenClawLightDomElement {
                   this.query = query;
                 },
                 onRefresh: () => void this.refreshCatalog(),
+                settingsHref: (pluginId) =>
+                  `${pathForPluginSettings(pluginId, this.context.basePath)}?from=plugins`,
                 onOpenSettings: (pluginId) => {
                   this.context.navigate("plugin-settings", {
                     pathname: pluginId

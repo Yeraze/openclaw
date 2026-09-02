@@ -9,6 +9,7 @@ import {
 } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiExternalText } from "../../lib/format-error.ts";
+import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import type {
   PluginCatalogItem,
   PluginListResult,
@@ -82,10 +83,6 @@ function matchesPlugin(plugin: PluginCatalogItem, query: string): boolean {
   ].some((value) => value?.toLocaleLowerCase().includes(needle));
 }
 
-function fromInteractiveChild(event: Event): boolean {
-  return event.target instanceof Element && Boolean(event.target.closest("button, a"));
-}
-
 export type YourPluginsProps = {
   connected: boolean;
   loading: boolean;
@@ -106,6 +103,7 @@ export type YourPluginsProps = {
   onSearchOpenChange: (open: boolean) => void;
   onQueryChange: (query: string) => void;
   onRefresh: () => void;
+  settingsHref: (pluginId: string) => string;
   onOpenSettings: (pluginId?: string) => void;
   onIconError: (pluginId: string) => void;
   onCancelConsent: () => void;
@@ -116,14 +114,17 @@ export type YourPluginsProps = {
 function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): TemplateResult {
   const open = () => props.onOpenSettings(plugin.id);
   return html`
-    <article
+    <a
       class="your-plugins-card oc-card oc-card-interactive"
       data-plugin-id=${plugin.id}
       data-plugin-status=${plugin.state}
-      @click=${(event: Event) => {
-        if (!fromInteractiveChild(event)) {
-          open();
+      href=${props.settingsHref(plugin.id)}
+      @click=${(event: MouseEvent) => {
+        if (!shouldHandleNavigationClick(event)) {
+          return;
         }
+        event.preventDefault();
+        open();
       }}
     >
       <div class="your-plugins-card__head">
@@ -135,16 +136,7 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
           "your-plugins-card__art",
         )}
         <div class="your-plugins-card__identity">
-          <h3>
-            <button
-              type="button"
-              class="your-plugins-card__link"
-              aria-label=${t("pluginsPage.openPluginSettings", { name: plugin.name })}
-              @click=${open}
-            >
-              ${plugin.name}
-            </button>
-          </h3>
+          <h3>${plugin.name}</h3>
           <p>${plugin.description || t("pluginsPage.optionalCapability")}</p>
         </div>
       </div>
@@ -157,7 +149,7 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
               ${t("pluginsPage.setupRequired")}
             </p>`
           : nothing}
-    </article>
+    </a>
   `;
 }
 
