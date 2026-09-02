@@ -146,7 +146,7 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
   const open = () => props.onOpenSettings(plugin.id);
   return html`
     <article
-      class="your-plugins-card"
+      class="your-plugins-card oc-card oc-card-interactive"
       data-plugin-id=${plugin.id}
       data-plugin-status=${plugin.state}
       @click=${(event: Event) => {
@@ -224,12 +224,11 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
         <header class="your-plugins__header">
           <div>
             <h2 id="your-plugins-title">${t("pluginsPage.yourPluginsTitle")}</h2>
-            <p>${t("pluginsPage.yourPluginsDescription")}</p>
           </div>
           <div class="your-plugins__actions">
             <button
               type="button"
-              class="btn btn--sm btn--icon"
+              class="btn btn--sm btn--icon oc-action oc-action-icon oc-action-ghost"
               aria-label=${t("pluginsPage.searchLabel")}
               title=${t("pluginsPage.searchLabel")}
               aria-expanded=${props.searchOpen ? "true" : "false"}
@@ -239,7 +238,7 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
             </button>
             <button
               type="button"
-              class="btn btn--sm btn--icon"
+              class="btn btn--sm btn--icon oc-action oc-action-icon oc-action-ghost"
               aria-label=${t("pluginsPage.pluginSettings")}
               title=${t("pluginsPage.pluginSettings")}
               @click=${() => props.onOpenSettings()}
@@ -253,6 +252,7 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
               <span>${t("pluginsPage.searchLabel")}</span>
               <input
                 type="search"
+                class="oc-input"
                 .value=${props.query}
                 placeholder=${t("pluginsPage.searchInstalledPlaceholder")}
                 @input=${(event: Event) => {
@@ -264,16 +264,23 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
             </label>`
           : nothing}
         ${props.loading
-          ? renderSettingsLoadingSkeleton({ label: t("pluginsPage.loading"), rows: 6 })
+          ? renderSettingsLoadingSkeleton({
+              label: t("pluginsPage.loading"),
+              rows: 6,
+              carapace: true,
+            })
           : props.error
-            ? html`<div class="callout danger" role="alert">${props.error}</div>`
+            ? html`<div class="callout danger oc-banner oc-banner-error" role="alert">
+                ${props.error}
+              </div>`
             : !props.connected
-              ? renderSettingsEmpty(t("pluginsPage.offlineBody"))
+              ? renderSettingsEmpty(t("pluginsPage.offlineBody"), { carapace: true })
               : visible.length === 0
                 ? renderSettingsEmpty(
                     props.query
                       ? t("pluginsPage.noInstalledMatchTitle")
                       : t("pluginsPage.noInstalledTitle"),
+                    { carapace: true },
                   )
                 : html`<div class="your-plugins__grid">
                     ${repeat(
@@ -286,7 +293,7 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
           ? html`<div class="your-plugins__more">
               <button
                 type="button"
-                class="btn btn--sm"
+                class="btn btn--sm oc-action oc-action-secondary"
                 @click=${() => props.onExpandedChange(!props.expanded)}
               >
                 ${props.expanded
@@ -297,7 +304,7 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
           : nothing}
       </section>
     `,
-    { wide: true },
+    { wide: true, carapace: true },
   )}
   ${props.consent
     ? renderPluginConsentDialog({

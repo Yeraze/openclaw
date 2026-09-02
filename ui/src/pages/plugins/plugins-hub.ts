@@ -23,6 +23,7 @@ export function renderPluginsHubTabs(props: {
     ariaLabel: t("pluginsPage.hubTablistLabel"),
     panelId: PLUGINS_HUB_PANEL_ID,
     className: "plugins-tabs",
+    carapace: true,
     onSelect: props.onSelect,
   });
 }

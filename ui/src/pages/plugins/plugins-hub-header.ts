@@ -30,7 +30,7 @@ export function renderPluginsHubHeader(props: PluginsHubHeaderProps): TemplateRe
         ${props.secondaryAction
           ? html`<button
               type="button"
-              class="btn btn--sm plugins-hub-header__secondary"
+              class="btn btn--sm plugins-hub-header__secondary oc-action oc-action-secondary"
               @click=${props.secondaryAction.onClick}
             >
               ${props.secondaryAction.label}

@@ -68,7 +68,6 @@
 }
 
 .your-plugins__header h2,
-.your-plugins__header p,
 .your-plugins-card h3,
 .your-plugins-card p {
   margin: 0;
@@ -77,12 +76,6 @@
 .your-plugins__header h2 {
   color: var(--text-strong);
   font-size: var(--control-ui-text-lg);
-}
-
-.your-plugins__header p {
-  margin-top: var(--space-1);
-  color: var(--muted);
-  font-size: var(--control-ui-text-sm);
 }
 
 .your-plugins__actions {

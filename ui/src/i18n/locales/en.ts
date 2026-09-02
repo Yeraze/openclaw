@@ -3061,7 +3061,6 @@ export const en: TranslationMap & {
     workshopTab: "Workshop",
     backToSkills: "Back to Skills",
     yourPluginsTitle: "Your plugins",
-    yourPluginsDescription: "Installed capabilities available to this gateway.",
     pluginSettings: "Plugin settings",
     openPluginSettings: "Open settings for {name}",
     enableNamed: "Enable {name}",

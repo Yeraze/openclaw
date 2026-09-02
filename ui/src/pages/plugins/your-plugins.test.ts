@@ -169,6 +169,16 @@ describe("renderYourPlugins", () => {
     expect(visiblePluginIds(container)).toHaveLength(12);
   });
 
+  it("uses the Carapace surface without repeating an inventory subtitle", () => {
+    const container = mount(baseProps());
+
+    expect(container.querySelector(".settings-page.oc-app-surface")).not.toBeNull();
+    expect(
+      container.querySelector(".your-plugins-card.oc-card.oc-card-interactive"),
+    ).not.toBeNull();
+    expect(container.querySelector(".your-plugins__header p")).toBeNull();
+  });
+
   it("routes the card and gear to settings while keeping inline toggles and feedback local", () => {
     const onOpenSettings = vi.fn();
     const onSetEnabled = vi.fn();
