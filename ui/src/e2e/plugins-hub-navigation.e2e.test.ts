@@ -103,11 +103,30 @@ async function headerGeometry(page: Page): Promise<HeaderGeometry> {
 }
 
 function expectStableHeader(actual: HeaderGeometry, expected: HeaderGeometry) {
-  expect(actual.title).toBe("Plugins");
   expect(Math.abs(actual.left - expected.left)).toBeLessThanOrEqual(1);
   expect(Math.abs(actual.top - expected.top)).toBeLessThanOrEqual(1);
   expect(Math.abs(actual.width - expected.width)).toBeLessThanOrEqual(1);
-  expect(Math.abs(actual.height - expected.height)).toBeLessThanOrEqual(1);
+}
+
+async function expectHeaderCopy(page: Page, active: "plugins" | "skills") {
+  const expected =
+    active === "plugins"
+      ? {
+          title: "Plugins",
+          subtitle: "Manage plugins and add capabilities from ClawHub.",
+          docs: "https://docs.openclaw.ai/plugins/manage-plugins",
+        }
+      : {
+          title: "Skills",
+          subtitle: "Manage agent skills and find new ones on ClawHub.",
+          docs: "https://docs.openclaw.ai/tools/skills",
+        };
+  const header = page.locator(".plugins-hub-header");
+  expect(await header.getByRole("heading", { level: 1 }).textContent()).toBe(expected.title);
+  expect(await header.locator(".page-subtitle").textContent()).toContain(expected.subtitle);
+  expect(await header.getByRole("link", { name: "Learn more" }).getAttribute("href")).toBe(
+    expected.docs,
+  );
 }
 
 async function captureScreenshot(page: Page, name: string) {
@@ -182,17 +201,20 @@ suite.define(() => {
         await page.getByRole("heading", { name: "Your plugins" }).waitFor();
         const pluginsHeader = await headerGeometry(page);
         expect(pluginsHeader.title).toBe("Plugins");
+        await expectHeaderCopy(page, "plugins");
         expect(await page.getByRole("tab").count()).toBe(2);
         expect(
           await page.getByRole("tab", { name: "Plugins", exact: true }).getAttribute("active"),
         ).not.toBeNull();
         expect(await page.getByRole("tab", { name: /Installed|Discover/u }).count()).toBe(0);
+        expect(await page.locator(".plugins-tabs.oc-segmented").count()).toBe(0);
         await expectActivePanelLabel(page, "plugins-tab-plugins");
         await captureScreenshot(page, `${label}-01-your-plugins.png`);
 
         await page.getByRole("tab", { name: "Skills", exact: true }).click();
         await waitForControlUiRoute(page, { pathname: "/skills", routeId: "skills" });
         expectStableHeader(await headerGeometry(page), pluginsHeader);
+        await expectHeaderCopy(page, "skills");
         await expectActivePanelLabel(page, "plugins-tab-skills");
         expect(await page.getByRole("button", { name: "Workshop", exact: true }).isVisible()).toBe(
           true,
@@ -205,6 +227,7 @@ suite.define(() => {
           routeId: "skill-workshop",
         });
         expectStableHeader(await headerGeometry(page), pluginsHeader);
+        await expectHeaderCopy(page, "skills");
         await expectActivePanelLabel(page, "plugins-tab-skills");
         expect(
           await page.getByRole("button", { name: "Back to Skills", exact: true }).isVisible(),
@@ -215,6 +238,7 @@ suite.define(() => {
         await page.getByRole("tab", { name: "Plugins", exact: true }).click();
         await waitForControlUiRoute(page, { pathname: "/plugins", routeId: "plugins" });
         expectStableHeader(await headerGeometry(page), pluginsHeader);
+        await expectHeaderCopy(page, "plugins");
       } finally {
         await context.close();
       }

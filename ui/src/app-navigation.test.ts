@@ -266,9 +266,9 @@ describe("subtitleForRoute", () => {
       cron: "Scheduled tasks and recurring agent runs.",
       tasks: "Background tasks: subagents, automation runs, CLI.",
       agents: "Workspaces, tools, identities.",
-      skills: "Skills and API keys.",
-      plugins: "Install and manage optional capabilities.",
-      "plugin-settings": "Install and manage optional capabilities.",
+      skills: "Manage agent skills and find new ones on ClawHub.",
+      plugins: "Manage plugins and add capabilities from ClawHub.",
+      "plugin-settings": "Manage plugins and add capabilities from ClawHub.",
       "skill-workshop":
         "The skills your agent uses now, suggestions waiting for review, and past decisions.",
       devices: "Paired devices, pairing approvals, and exec bindings.",

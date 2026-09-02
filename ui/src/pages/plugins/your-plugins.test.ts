@@ -17,7 +17,6 @@ function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps 
     searchOpen: false,
     query: "",
     busy: {},
-    messages: {},
     iconUrls: {},
     canMutate: true,
     mutationBlockedReason: null,
@@ -30,7 +29,6 @@ function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps 
     onQueryChange: vi.fn(),
     onRefresh: vi.fn(),
     onOpenSettings: vi.fn(),
-    onSetEnabled: vi.fn(),
     onIconError: vi.fn(),
     onCancelConsent: vi.fn(),
     onConfirmConsent: vi.fn(),
@@ -79,7 +77,7 @@ describe("renderYourPlugins", () => {
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it("prioritizes actionable plugins while keeping search independent from Show all", () => {
+  it("prioritizes actionable plugins while keeping inline search independent from Show all", async () => {
     const plugins = [
       createPlugin({ id: "attention-b", name: "Attention B", state: "error", order: 20 }),
       createPlugin({ id: "needs-setup", name: "Needs Setup", state: "needs-setup", order: 5 }),
@@ -155,11 +153,18 @@ describe("renderYourPlugins", () => {
       container.querySelector<HTMLInputElement>('input[type="search"]'),
       "expanded inventory search",
     );
+    await Promise.resolve();
+    expect(search.closest(".your-plugins__actions")).not.toBeNull();
+    expect(document.activeElement).toBe(search);
     search.value = "disabled 10";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     expect(visiblePluginIds(container)).toEqual(["disabled-10"]);
 
-    searchButton.click();
+    const closeSearch = expectDefined(
+      container.querySelector<HTMLButtonElement>('.your-plugins__search [aria-label="Close"]'),
+      "close search button",
+    );
+    closeSearch.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
     expect(visiblePluginIds(container)).toHaveLength(12);
 
@@ -194,31 +199,14 @@ describe("renderYourPlugins", () => {
     expect(container.querySelector(".your-plugins__header p")).toBeNull();
   });
 
-  it("routes the card and gear to settings while keeping inline toggles and feedback local", () => {
+  it("routes cards and the gear to settings without inline mutation controls or icon tooltips", () => {
     const onOpenSettings = vi.fn();
-    const onSetEnabled = vi.fn();
-    const plugins = [
-      createPlugin({ id: "successful", name: "Successful" }),
-      createPlugin({ id: "failed", name: "Failed", enabled: true, state: "enabled" }),
-    ];
     const container = mount(
       baseProps({
-        result: createResult(plugins),
-        messages: {
-          "plugin:successful": { kind: "success", text: "Enabled Successful" },
-          "plugin:failed": { kind: "error", text: "Failed to disable Failed" },
-        },
+        result: createResult([createPlugin({ id: "successful", name: "Successful" })]),
         onOpenSettings,
-        onSetEnabled,
       }),
     );
-
-    expect(
-      container.querySelector('[data-plugin-id="successful"] [role="status"]')?.textContent,
-    ).toContain("Enabled Successful");
-    expect(
-      container.querySelector('[data-plugin-id="failed"] [role="alert"]')?.textContent,
-    ).toContain("Failed to disable Failed");
 
     const successful = expectDefined(
       container.querySelector<HTMLElement>('[data-plugin-id="successful"]'),
@@ -227,14 +215,13 @@ describe("renderYourPlugins", () => {
     successful.click();
     expect(onOpenSettings).toHaveBeenCalledWith("successful");
 
-    const toggle = expectDefined(
-      successful.querySelector<HTMLElement & { checked: boolean }>("wa-switch"),
-      "enable switch",
+    const title = expectDefined(
+      successful.querySelector<HTMLButtonElement>(".your-plugins-card__link"),
+      "plugin title link",
     );
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(onSetEnabled).toHaveBeenCalledWith("successful", true, "plugin:successful");
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    title.click();
+    expect(onOpenSettings).toHaveBeenLastCalledWith("successful");
+    expect(successful.querySelector("wa-switch")).toBeNull();
 
     const settings = expectDefined(
       container.querySelector<HTMLButtonElement>(
@@ -242,19 +229,22 @@ describe("renderYourPlugins", () => {
       ),
       "settings button",
     );
+    const search = expectDefined(
+      container.querySelector<HTMLButtonElement>('[aria-label="Search plugins"]'),
+      "search button",
+    );
+    expect(search.hasAttribute("title")).toBe(false);
+    expect(settings.hasAttribute("title")).toBe(false);
     settings.click();
     expect(onOpenSettings).toHaveBeenLastCalledWith();
   });
 
-  it("keeps mutation feedback visible beside an unchanged setup state", () => {
+  it("keeps setup-required state visible as read-only inventory context", () => {
     const container = mount(
       baseProps({
         result: createResult([
           createPlugin({ id: "needs-setup", name: "Needs Setup", state: "needs-setup" }),
         ]),
-        messages: {
-          "plugin:needs-setup": { kind: "error", text: "Enable failed before setup completed" },
-        },
       }),
     );
 
@@ -264,76 +254,6 @@ describe("renderYourPlugins", () => {
     );
     expect(card.textContent).toContain("Setup required");
     expect(card.getAttribute("data-plugin-status")).toBe("needs-setup");
-    expect(card.querySelector('[role="alert"]')?.textContent).toContain(
-      "Enable failed before setup completed",
-    );
-  });
-
-  it("keeps setup-required plugins disabled until configuration is complete", async () => {
-    const onSetEnabled = vi.fn();
-    const container = mount(
-      baseProps({
-        result: createResult([
-          createPlugin({ id: "needs-setup", name: "Needs Setup", state: "needs-setup" }),
-        ]),
-        onSetEnabled,
-      }),
-    );
-    const toggle = expectDefined(
-      container.querySelector<HTMLElement & { checked: boolean }>("wa-switch"),
-      "setup-required enable switch",
-    );
-    const tooltip = expectDefined(
-      toggle.closest("openclaw-tooltip") as
-        | (HTMLElement & { content?: string; updateComplete: Promise<unknown> })
-        | null,
-      "setup-required reason tooltip",
-    );
-    await tooltip.updateComplete;
-    expect(tooltip.content).toBe("Configure this plugin before enabling it.");
-
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(toggle.checked).toBe(false);
-    expect(onSetEnabled).not.toHaveBeenCalled();
-  });
-
-  it("keeps read-only mutation controls explainable without invoking a mutation or card navigation", async () => {
-    const onOpenSettings = vi.fn();
-    const onSetEnabled = vi.fn();
-    const blockedReason = "Plugin changes require operator.admin access.";
-    const container = mount(
-      baseProps({
-        result: createResult([createPlugin()]),
-        canMutate: false,
-        mutationBlockedReason: blockedReason,
-        onOpenSettings,
-        onSetEnabled,
-      }),
-    );
-    const card = expectDefined(
-      container.querySelector<HTMLElement>('[data-plugin-id="workboard"]'),
-      "workboard plugin card",
-    );
-    const toggle = expectDefined(
-      card.querySelector<HTMLElement & { checked: boolean }>("wa-switch"),
-      "read-only enable switch",
-    );
-    expect(toggle.checked).toBe(false);
-    const tooltip = expectDefined(
-      toggle.closest("openclaw-tooltip") as
-        | (HTMLElement & { content?: string; updateComplete: Promise<unknown> })
-        | null,
-      "read-only reason tooltip",
-    );
-    await tooltip.updateComplete;
-    expect(tooltip.content).toBe(blockedReason);
-
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(toggle.checked).toBe(false);
-    expect(onSetEnabled).not.toHaveBeenCalled();
-    expect(onOpenSettings).not.toHaveBeenCalled();
+    expect(card.querySelector("wa-switch")).toBeNull();
   });
 });

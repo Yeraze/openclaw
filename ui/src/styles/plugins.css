@@ -19,11 +19,6 @@
   max-width: 1120px;
   margin-inline: auto;
   padding-inline: var(--settings-header-inline-padding, var(--space-4));
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--oc-space-5);
-  max-height: none;
 }
 
 .plugins-hub-header + .settings-workspace {
@@ -31,26 +26,8 @@
   margin-top: 0;
 }
 
-.plugins-hub-header .hub-page-header__tabs {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.plugins-hub-header .plugins-tabs {
-  flex: 1 1 auto;
-}
-
 .plugins-hub-header__secondary {
   flex: 0 0 auto;
-}
-
-@media (max-width: 400px) {
-  .content-header.hub-page-header.plugins-hub-header {
-    gap: var(--space-4);
-  }
 }
 
 /* ---------- Your plugins ---------- */
@@ -62,7 +39,7 @@
 
 .your-plugins__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
@@ -85,7 +62,40 @@
 }
 
 .your-plugins__search {
-  width: min(420px, 100%);
+  position: relative;
+  width: min(280px, 42vw);
+}
+
+.your-plugins__search input {
+  width: 100%;
+  height: var(--settings-control-height);
+  padding-inline: 34px;
+}
+
+.your-plugins__search-icon,
+.your-plugins__search-close {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+}
+
+.your-plugins__search-icon {
+  left: 10px;
+  display: inline-flex;
+  width: 16px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.your-plugins__search-icon svg,
+.your-plugins__search-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.your-plugins__search-close {
+  right: 3px;
 }
 
 .your-plugins__grid {
@@ -102,7 +112,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
-  cursor: var(--cursor-action);
+  cursor: pointer;
   transition:
     border-color var(--duration-fast) ease,
     box-shadow var(--duration-fast) ease,
@@ -117,7 +127,7 @@
 
 .your-plugins-card__head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
 }
@@ -177,7 +187,7 @@
   border: 0;
   background: transparent;
   color: var(--text-strong);
-  cursor: var(--cursor-action);
+  cursor: pointer;
   font: inherit;
   font-size: var(--control-ui-text-md);
   font-weight: 600;
@@ -197,10 +207,6 @@
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-
-.your-plugins-card__toggle {
-  align-self: start;
 }
 
 .your-plugins-card__error,

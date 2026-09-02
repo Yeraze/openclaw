@@ -1,12 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit";
+import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
 import { icons } from "../../components/icons.ts";
-import { renderReasonedDisabledControl } from "../../components/reasoned-disabled-control.ts";
 import {
   renderSettingsEmpty,
   renderSettingsLoadingSkeleton,
   renderSettingsPage,
-  renderSettingsToggle,
 } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiExternalText } from "../../lib/format-error.ts";
@@ -20,7 +19,6 @@ import {
   renderPluginConsentDialog,
   type PluginConsentState,
 } from "./consent-dialog.ts";
-import type { PluginRowMessage } from "./view.ts";
 
 const YOUR_PLUGINS_INITIAL_LIMIT = 12;
 
@@ -85,9 +83,7 @@ function matchesPlugin(plugin: PluginCatalogItem, query: string): boolean {
 }
 
 function fromInteractiveChild(event: Event): boolean {
-  return (
-    event.target instanceof Element && Boolean(event.target.closest("button, a, input, wa-switch"))
-  );
+  return event.target instanceof Element && Boolean(event.target.closest("button, a"));
 }
 
 export type YourPluginsProps = {
@@ -99,7 +95,6 @@ export type YourPluginsProps = {
   searchOpen: boolean;
   query: string;
   busy: Record<string, boolean>;
-  messages: Record<string, PluginRowMessage>;
   iconUrls: Record<string, string>;
   canMutate: boolean;
   mutationBlockedReason: string | null;
@@ -112,42 +107,13 @@ export type YourPluginsProps = {
   onQueryChange: (query: string) => void;
   onRefresh: () => void;
   onOpenSettings: (pluginId?: string) => void;
-  onSetEnabled: (pluginId: string, enabled: boolean, rowKey: string) => void;
   onIconError: (pluginId: string) => void;
   onCancelConsent: () => void;
   onConfirmConsent: () => void;
   onRetryConsentInspection: () => void;
 };
 
-function renderToggle(plugin: PluginCatalogItem, rowKey: string, props: YourPluginsProps) {
-  const busy = Boolean(props.busy[rowKey]);
-  const blockedReason =
-    plugin.state === "needs-setup"
-      ? t("pluginsPage.setupRequiredEnableBlocked")
-      : props.mutationBlockedReason;
-  const toggle = renderSettingsToggle({
-    checked: plugin.enabled,
-    disabled: !blockedReason && (!props.canMutate || busy),
-    ariaLabel: t(plugin.enabled ? "pluginsPage.disableNamed" : "pluginsPage.enableNamed", {
-      name: plugin.name,
-    }),
-    ariaDisabled: Boolean(blockedReason),
-    onChange: (enabled) => {
-      if (blockedReason || !props.canMutate || busy) {
-        return false;
-      }
-      props.onSetEnabled(plugin.id, enabled, rowKey);
-      // The catalog response is authoritative; keep the switch at the recorded
-      // value until the mutation refresh commits the new plugin state.
-      return false;
-    },
-  });
-  return renderReasonedDisabledControl(blockedReason, toggle);
-}
-
 function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): TemplateResult {
-  const rowKey = `plugin:${plugin.id}`;
-  const message = props.messages[rowKey];
   const open = () => props.onOpenSettings(plugin.id);
   return html`
     <article
@@ -181,13 +147,6 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
           </h3>
           <p>${plugin.description || t("pluginsPage.optionalCapability")}</p>
         </div>
-        <div
-          class="your-plugins-card__toggle"
-          @click=${(event: Event) => event.stopPropagation()}
-          @keydown=${(event: Event) => event.stopPropagation()}
-        >
-          ${renderToggle(plugin, rowKey, props)}
-        </div>
       </div>
       ${plugin.error
         ? html`<p class="your-plugins-card__error" role="alert">
@@ -198,14 +157,6 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
               ${t("pluginsPage.setupRequired")}
             </p>`
           : nothing}
-      ${message
-        ? html`<p
-            class="your-plugins-card__message your-plugins-card__message--${message.kind}"
-            role=${message.kind === "error" ? "alert" : "status"}
-          >
-            ${message.text}
-          </p>`
-        : nothing}
     </article>
   `;
 }
@@ -231,43 +182,62 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
             <h2 id="your-plugins-title">${t("pluginsPage.yourPluginsTitle")}</h2>
           </div>
           <div class="your-plugins__actions">
-            <button
-              type="button"
-              class="btn btn--sm btn--icon oc-action oc-action-icon oc-action-ghost"
-              aria-label=${t("pluginsPage.searchLabel")}
-              title=${t("pluginsPage.searchLabel")}
-              aria-expanded=${props.searchOpen ? "true" : "false"}
-              @click=${() => props.onSearchOpenChange(!props.searchOpen)}
-            >
-              ${icons.search}
-            </button>
+            ${props.searchOpen
+              ? html`<div class="your-plugins__search">
+                  <span class="your-plugins__search-icon" aria-hidden="true">${icons.search}</span>
+                  <input
+                    type="search"
+                    class="oc-input"
+                    aria-label=${t("pluginsPage.searchLabel")}
+                    .value=${props.query}
+                    placeholder=${t("pluginsPage.searchInstalledPlaceholder")}
+                    ${ref((element) => {
+                      if (
+                        element instanceof HTMLInputElement &&
+                        document.activeElement !== element
+                      ) {
+                        queueMicrotask(() => element.focus());
+                      }
+                    })}
+                    @input=${(event: Event) => {
+                      if (event.currentTarget instanceof HTMLInputElement) {
+                        props.onQueryChange(event.currentTarget.value);
+                      }
+                    }}
+                    @keydown=${(event: KeyboardEvent) => {
+                      if (event.key === "Escape") {
+                        props.onSearchOpenChange(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    class="btn btn--sm btn--icon your-plugins__search-close oc-action oc-action-icon oc-action-ghost"
+                    aria-label=${t("common.close")}
+                    @click=${() => props.onSearchOpenChange(false)}
+                  >
+                    ${icons.x}
+                  </button>
+                </div>`
+              : html`<button
+                  type="button"
+                  class="btn btn--sm btn--icon oc-action oc-action-icon oc-action-ghost"
+                  aria-label=${t("pluginsPage.searchLabel")}
+                  aria-expanded="false"
+                  @click=${() => props.onSearchOpenChange(true)}
+                >
+                  ${icons.search}
+                </button>`}
             <button
               type="button"
               class="btn btn--sm btn--icon oc-action oc-action-icon oc-action-ghost"
               aria-label=${t("pluginsPage.pluginSettings")}
-              title=${t("pluginsPage.pluginSettings")}
               @click=${() => props.onOpenSettings()}
             >
               ${icons.settings}
             </button>
           </div>
         </header>
-        ${props.searchOpen
-          ? html`<label class="plugins-field your-plugins__search">
-              <span>${t("pluginsPage.searchLabel")}</span>
-              <input
-                type="search"
-                class="oc-input"
-                .value=${props.query}
-                placeholder=${t("pluginsPage.searchInstalledPlaceholder")}
-                @input=${(event: Event) => {
-                  if (event.currentTarget instanceof HTMLInputElement) {
-                    props.onQueryChange(event.currentTarget.value);
-                  }
-                }}
-              />
-            </label>`
-          : nothing}
         ${props.loading
           ? renderSettingsLoadingSkeleton({
               label: t("pluginsPage.loading"),

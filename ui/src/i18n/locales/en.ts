@@ -2427,8 +2427,8 @@ export const en: TranslationMap & {
     usage: "API usage and costs.",
     cron: "Scheduled tasks and recurring agent runs.",
     tasks: "Background tasks: subagents, automation runs, CLI.",
-    skills: "Skills and API keys.",
-    plugins: "Install and manage optional capabilities.",
+    skills: "Manage agent skills and find new ones on ClawHub.",
+    plugins: "Manage plugins and add capabilities from ClawHub.",
     skillWorkshop:
       "The skills your agent uses now, suggestions waiting for review, and past decisions.",
     devices: "Paired devices, pairing approvals, and exec bindings.",

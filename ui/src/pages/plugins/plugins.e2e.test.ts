@@ -13,10 +13,6 @@ import type {
   PluginsInspectResult,
 } from "../../lib/plugins/index.ts";
 import {
-  waitForControlUiGatewayReady,
-  waitForControlUiGatewayReconnecting,
-} from "../../test-helpers/control-ui-e2e-readiness.ts";
-import {
   canRunPlaywrightChromium,
   installMockGateway,
   resolvePlaywrightChromiumExecutablePath,
@@ -312,22 +308,6 @@ function readOnlyConnectResponse() {
   };
 }
 
-function enabledWorkboardConnectResponse(base: Record<string, unknown>) {
-  return {
-    ...base,
-    controlUiTabs: [
-      {
-        group: "control",
-        icon: "kanban",
-        id: "workboard",
-        label: "Workboard",
-        placement: "route:workboard",
-        pluginId: "workboard",
-      },
-    ],
-  };
-}
-
 const requireRecord = createRequireRecord("record", "expected-object-value");
 
 function requestParams(request: MockGatewayRequest): Record<string, unknown> {
@@ -445,28 +425,14 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
     await server?.close();
   });
 
-  it("shows a prioritized Your plugins inventory and keeps inline enable feedback in place", async () => {
+  it("shows a prioritized Your plugins inventory with inline search and settings navigation", async () => {
     const context = await newContext();
     const page = await context.newPage();
-    const disabledPlugin = yourPluginsItems.find((plugin) => plugin.id === "workboard")!;
-    const enabledPlugin = {
-      ...disabledPlugin,
-      enabled: true,
-      state: "enabled",
-    } satisfies PluginCatalogItem;
-    const enabledInventory = inventory(
-      yourPluginsItems.map((plugin) => (plugin.id === enabledPlugin.id ? enabledPlugin : plugin)),
-    );
     const gateway = await installMockGateway(page, {
       featureMethods: pluginMethods,
       methodResponses: {
         ...pluginMethodResponses(),
         "plugins.list": yourPluginsInventory,
-        "plugins.setEnabled": {
-          ok: true,
-          plugin: enabledPlugin,
-          restartRequired: false,
-        } satisfies PluginMutationResult,
       },
     });
 
@@ -491,18 +457,14 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       expect(await firstCard.textContent()).not.toContain("internal-category");
       const geometry = await firstCard.evaluate((card) => {
         const cardRect = card.getBoundingClientRect();
-        const switchRect = card.querySelector("wa-switch")?.getBoundingClientRect();
         return {
           aspectRatio: cardRect.width / cardRect.height,
-          switchRightGap: switchRect ? cardRect.right - switchRect.right : Number.POSITIVE_INFINITY,
-          switchTopGap: switchRect ? switchRect.top - cardRect.top : Number.POSITIVE_INFINITY,
+          cursor: getComputedStyle(card).cursor,
         };
       });
       expect(geometry.aspectRatio).toBeGreaterThan(1.5);
-      expect(geometry.switchRightGap).toBeGreaterThanOrEqual(0);
-      expect(geometry.switchRightGap).toBeLessThan(32);
-      expect(geometry.switchTopGap).toBeGreaterThanOrEqual(0);
-      expect(geometry.switchTopGap).toBeLessThan(32);
+      expect(geometry.cursor).toBe("pointer");
+      expect(await firstCard.locator("wa-switch").count()).toBe(0);
       const grid = page.locator(".your-plugins__grid");
       const columnCount = () =>
         grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
@@ -525,10 +487,18 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
 
       await page.getByRole("button", { name: "Search plugins", exact: true }).click();
       const search = page.getByRole("searchbox", { name: "Search plugins" });
+      await expect
+        .poll(() => search.evaluate((element) => element === document.activeElement))
+        .toBe(true);
+      expect(
+        await search
+          .locator("xpath=ancestor::*[contains(@class, 'your-plugins__actions')]")
+          .count(),
+      ).toBe(1);
       await search.fill("Disabled 10");
       expect(await cards.count()).toBe(1);
       expect(await cards.first().getAttribute("data-plugin-id")).toBe("disabled-10");
-      await page.getByRole("button", { name: "Search plugins", exact: true }).click();
+      await page.getByRole("button", { name: "Close", exact: true }).click();
       expect(await search.count()).toBe(0);
       expect(await cards.count()).toBe(12);
 
@@ -537,76 +507,16 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await page.getByRole("button", { name: "Back", exact: true }).click();
       expect(await cards.count()).toBe(12);
 
-      const card = page.locator('[data-plugin-id="workboard"]');
-      const routeBeforeEnable = new URL(page.url()).pathname;
-      const enableCount = (await gateway.getRequests("plugins.setEnabled")).length;
-      await gateway.deferNext("plugins.setEnabled");
-      await card.locator("wa-switch").click();
-      const enableRequest = await waitForNextRequest(gateway, "plugins.setEnabled", enableCount);
-      expect(requestParams(enableRequest)).toEqual({ pluginId: "workboard", enabled: true });
-      expect(new URL(page.url()).pathname).toBe(routeBeforeEnable);
-      await gateway.rejectDeferred("plugins.setEnabled", {
-        code: "UNAVAILABLE",
-        message: "Enable temporarily unavailable",
-      });
-      await card.getByRole("alert").waitFor({ state: "visible" });
-      expect(await card.getByRole("alert").textContent()).toContain(
-        "Enable temporarily unavailable",
-      );
-      expect(new URL(page.url()).pathname).toBe(routeBeforeEnable);
-
-      await gateway.setMethodResponse("plugins.list", enabledInventory);
-      await gateway.setMethodResponse("config.get", configSnapshot(true));
-      const hello = await page.evaluate(
-        () =>
-          (
-            document.querySelector("openclaw-app") as unknown as {
-              runtime: {
-                context: { gateway: { snapshot: { hello: Record<string, unknown> } } };
-              };
-            }
-          ).runtime.context.gateway.snapshot.hello,
-      );
-      await gateway.setMethodResponse("connect", enabledWorkboardConnectResponse(hello));
-      const successCount = (await gateway.getRequests("plugins.setEnabled")).length;
-      await card.locator("wa-switch").click();
-      const successRequest = await waitForNextRequest(gateway, "plugins.setEnabled", successCount);
-      expect(requestParams(successRequest)).toEqual({ pluginId: "workboard", enabled: true });
-      await expect
-        .poll(() =>
-          card.getByRole("switch", { name: "Disable Workboard", exact: true }).isChecked(),
-        )
-        .toBe(true);
-      await expect
-        .poll(() => card.getByRole("status").textContent())
-        .toContain("Enabled Workboard");
-      await gateway.setOnline(false);
-      await waitForControlUiGatewayReconnecting(page);
-      await gateway.setOnline(true);
-      await waitForControlUiGatewayReady(page);
-      expect(
-        await page.evaluate(
-          () =>
-            (
-              document.querySelector("openclaw-app") as unknown as {
-                runtime: {
-                  context: { gateway: { snapshot: { hello: { controlUiTabs: unknown } } } };
-                };
-              }
-            ).runtime.context.gateway.snapshot.hello.controlUiTabs,
-        ),
-      ).toEqual(enabledWorkboardConnectResponse(hello).controlUiTabs);
-      const workboardSidebarItem = page.locator(
-        '.sidebar-zone-entry[data-sidebar-entry="plugin:workboard/workboard"] > .nav-item',
-      );
-      await workboardSidebarItem.waitFor({ state: "visible" });
-      expect(await workboardSidebarItem.getAttribute("href")).toBe("/workboard");
-      expect(new URL(page.url()).pathname).toBe(routeBeforeEnable);
+      expect(await gateway.getRequests("plugins.setEnabled")).toEqual([]);
       expect(await gateway.getRequests("plugins.search")).toEqual([]);
       expect(await gateway.getRequests("plugins.install")).toEqual([]);
 
       await page.getByRole("button", { name: "Plugin settings", exact: true }).click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins");
+      await page.goto(`${server.baseUrl}plugins`);
+      await page.locator('[data-plugin-id="workboard"]').click();
+      await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/workboard");
+      expect(new URL(page.url()).search).toBe("?from=plugins");
       await page.goto(`${server.baseUrl}plugins`);
       const openAttentionSettings = page.getByRole("button", {
         name: "Open settings for Attention A",
@@ -635,13 +545,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await page.goto(`${server.baseUrl}plugins`);
       const discoveryWorkboardCard = page.locator('[data-plugin-id="workboard"]');
       await discoveryWorkboardCard.waitFor({ state: "visible" });
-      const discoveryEnable = discoveryWorkboardCard.getByRole("switch", {
-        name: "Enable Workboard",
-        exact: true,
-      });
-      expect(await discoveryEnable.isChecked()).toBe(false);
-      await discoveryWorkboardCard.locator("wa-switch").click();
-      expect(await discoveryEnable.isChecked()).toBe(false);
+      expect(await discoveryWorkboardCard.locator("wa-switch").count()).toBe(0);
       expect(new URL(page.url()).pathname).toBe("/plugins");
       expect(await gateway.getRequests("plugins.setEnabled")).toEqual([]);
       await discoveryWorkboardCard

@@ -584,7 +584,6 @@ class PluginsPage extends OpenClawLightDomElement {
                 searchOpen: this.inventorySearchOpen,
                 query: this.query,
                 busy: this.busy,
-                messages: this.messages,
                 iconUrls: this.iconUrls,
                 canMutate: this.canMutate(),
                 mutationBlockedReason: blockedReason,
@@ -610,11 +609,10 @@ class PluginsPage extends OpenClawLightDomElement {
                     pathname: pluginId
                       ? pathForPluginSettings(pluginId, this.context.basePath)
                       : pathForRoute("plugin-settings", this.context.basePath),
+                    search: pluginId ? "?from=plugins" : "",
                   });
                 },
                 onIconError: (pluginId) => this.handlePluginIconError(pluginId),
-                onSetEnabled: (pluginId, enabled, rowKey) =>
-                  void this.updateEnabled(pluginId, enabled, rowKey),
                 onCancelConsent: () => this.consentController.close(),
                 onConfirmConsent: () => this.consentController.confirm(),
                 onRetryConsentInspection: () => void this.consentController.inspect(),
