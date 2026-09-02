@@ -31,10 +31,13 @@ import {
 import { loadPluginManifestRegistryCore, type PluginManifestRecord } from "./manifest-registry.js";
 import { safeRealpathSync } from "./path-safety.js";
 import { createPluginCache, withPluginCache } from "./plugin-cache.js";
+import {
+  resolvePluginConfigEnablement,
+  type PluginConfigEnablement,
+} from "./plugin-config-enablement.js";
 import { tracePluginLifecyclePhaseAsync } from "./plugin-lifecycle-trace.js";
 import { loadPluginMetadataSnapshot } from "./plugin-metadata-snapshot.js";
 import { refreshPluginRegistryAfterConfigMutation } from "./registry-refresh.js";
-import { validatePluginSchemaValue } from "./schema-validator.js";
 import { applySlotSelectionForPlugin } from "./slot-selection.js";
 import { buildPluginSnapshotReport } from "./status.js";
 import { recordPluginPackageUninstallPlan } from "./uninstall-package-plan.js";
@@ -217,40 +220,7 @@ export function prepareConfigForDisabledInstall(cfg: OpenClawConfig, id: string)
   };
 }
 
-type PluginConfigEnablement =
-  | { mode: "ready" }
-  | { mode: "missing" }
-  | { mode: "invalid"; error: string };
-
-function resolvePluginConfigEnablement(params: {
-  config: OpenClawConfig;
-  pluginId: string;
-  manifest?: PluginManifestRecord;
-}): PluginConfigEnablement {
-  const manifest = params.manifest;
-  if (!manifest?.configSchema) {
-    return { mode: "ready" };
-  }
-  const entry = params.config.plugins?.entries?.[params.pluginId];
-  const hasConfig = isRecord(entry) && Object.hasOwn(entry, "config");
-  const result = validatePluginSchemaValue({
-    origin: manifest.origin,
-    schema: manifest.configSchema,
-    cacheKey: manifest.schemaCacheKey ?? manifest.manifestPath,
-    value: hasConfig ? entry.config : {},
-    applyDefaults: true,
-  });
-  if (result.ok) {
-    return { mode: "ready" };
-  }
-  // A malformed manifest schema fails validation regardless of what config is supplied,
-  // so it is never "missing" (no config value could satisfy it) even when hasConfig is
-  // false; only a well-formed schema rejecting an absent/empty config counts as missing.
-  if (!hasConfig && !result.schemaError) {
-    return { mode: "missing" };
-  }
-  return { mode: "invalid", error: result.errors[0]?.text ?? "invalid plugin config" };
-}
+export { resolvePluginConfigEnablement, type PluginConfigEnablement };
 
 export async function persistPluginInstall(params: {
   snapshot: ConfigSnapshotForInstallPersist;
