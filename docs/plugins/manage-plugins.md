@@ -29,8 +29,8 @@ Control UI base path. For example, a base path of `/openclaw` uses
 **Your plugins** shows up to 12 installed plugins, prioritizing enabled plugins,
 plugins that need setup, and plugins that need attention. Use search to filter
 the full inventory or choose **Show all** to browse every installed plugin. Each
-card shows the description and state. Administrators can use the card's switch
-to enable or disable a plugin; read-only operators can still inspect it.
+card shows the plugin description. Choose a card to open its settings, where
+administrators can enable or disable it and read-only operators can inspect it.
 
 Choose a card or its settings action to open that plugin's details. Use
 the settings action beside **Your plugins**, or open `/settings/plugins`, for
@@ -38,8 +38,8 @@ the complete plugin inventory. The settings page also lists configured
 [MCP servers](/cli/mcp), editing `mcp.servers` in the Gateway configuration.
 
 Included plugins do not need a package install. Workboard, for example, is
-included with OpenClaw and disabled by default, so its card switch starts off.
-Bundled plugins can be disabled but not removed.
+included with OpenClaw and disabled by default. Bundled plugins can be disabled
+but not removed.
 
 Inventory access requires `operator.read`. Enable, disable, and MCP server
 changes require `operator.admin`. Enabling an installed plugin as an
