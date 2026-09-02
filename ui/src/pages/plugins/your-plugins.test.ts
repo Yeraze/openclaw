@@ -28,6 +28,7 @@ function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps 
     onExpandedChange: vi.fn(),
     onSearchOpenChange: vi.fn(),
     onQueryChange: vi.fn(),
+    onRefresh: vi.fn(),
     onOpenSettings: vi.fn(),
     onSetEnabled: vi.fn(),
     onIconError: vi.fn(),
@@ -62,6 +63,20 @@ describe("renderYourPlugins", () => {
     }
     document.body.replaceChildren();
     vi.restoreAllMocks();
+  });
+
+  it("retries a failed catalog load without leaving the workspace", () => {
+    const onRefresh = vi.fn();
+    const container = mount(baseProps({ error: "Catalog unavailable", onRefresh }));
+
+    const alert = expectDefined(container.querySelector('[role="alert"]'), "catalog error");
+    expect(alert.textContent).toContain("Catalog unavailable");
+    const retry = expectDefined(alert.querySelector<HTMLButtonElement>("button"), "retry button");
+    expect(retry.textContent?.trim()).toBe("Try again");
+
+    retry.click();
+
+    expect(onRefresh).toHaveBeenCalledOnce();
   });
 
   it("prioritizes actionable plugins while keeping search independent from Show all", () => {

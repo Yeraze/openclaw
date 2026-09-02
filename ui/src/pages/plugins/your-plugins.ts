@@ -110,6 +110,7 @@ export type YourPluginsProps = {
   onExpandedChange: (expanded: boolean) => void;
   onSearchOpenChange: (open: boolean) => void;
   onQueryChange: (query: string) => void;
+  onRefresh: () => void;
   onOpenSettings: (pluginId?: string) => void;
   onSetEnabled: (pluginId: string, enabled: boolean, rowKey: string) => void;
   onIconError: (pluginId: string) => void;
@@ -271,7 +272,14 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
             })
           : props.error
             ? html`<div class="callout danger oc-banner oc-banner-error" role="alert">
-                ${props.error}
+                <span>${props.error}</span>
+                <button
+                  type="button"
+                  class="btn btn--sm oc-action oc-action-secondary oc-banner-action"
+                  @click=${props.onRefresh}
+                >
+                  ${t("pluginsPage.tryAgain")}
+                </button>
               </div>`
             : !props.connected
               ? renderSettingsEmpty(t("pluginsPage.offlineBody"), { carapace: true })
