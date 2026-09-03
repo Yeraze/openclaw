@@ -455,7 +455,29 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await page.setViewportSize(desktopViewport);
       await captureScreenshot(page, "12-your-plugins-desktop.png");
 
-      await page.getByRole("button", { name: "Search plugins", exact: true }).click();
+      const settingsButton = page.getByRole("button", { name: "Plugin settings", exact: true });
+      const searchButton = page.getByRole("button", { name: "Search plugins", exact: true });
+      for (const iconButton of [searchButton, settingsButton]) {
+        const appearance = await iconButton.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            width: rect.width,
+            height: rect.height,
+            borderWidth: style.borderWidth,
+            borderColor: style.borderColor,
+            backgroundColor: style.backgroundColor,
+          };
+        });
+        expect(appearance).toMatchObject({
+          width: 24,
+          height: 24,
+          borderColor: "rgba(0, 0, 0, 0)",
+          backgroundColor: "rgba(0, 0, 0, 0)",
+        });
+      }
+      const settingsBeforeSearch = await settingsButton.boundingBox();
+      await searchButton.click();
       const search = page.getByRole("searchbox", { name: "Search plugins" });
       await expect
         .poll(() => search.evaluate((element) => element === document.activeElement))
@@ -493,7 +515,33 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       expect(await search.count()).toBe(0);
       expect(await cards.count()).toBe(12);
 
-      await page.getByRole("button", { name: "Show all 16", exact: true }).click();
+      const showAll = page.getByRole("button", { name: "Show all 16", exact: true });
+      const restingMoreAppearance = await showAll.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          backgroundColor: style.backgroundColor,
+          borderColor: style.borderColor,
+        };
+      });
+      expect(restingMoreAppearance).toMatchObject({
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderColor: "rgba(0, 0, 0, 0)",
+      });
+      await showAll.hover();
+      const hoverMoreAppearance = await showAll.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          backgroundColor: style.backgroundColor,
+          borderColor: style.borderColor,
+          filter: style.filter,
+        };
+      });
+      expect(hoverMoreAppearance).toMatchObject({
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        borderColor: "rgba(0, 0, 0, 0)",
+      });
+      expect(hoverMoreAppearance.filter).toBe("brightness(1.35)");
+      await showAll.click();
       expect(await cards.count()).toBe(16);
       await page.getByRole("button", { name: "Back", exact: true }).click();
       expect(await cards.count()).toBe(12);

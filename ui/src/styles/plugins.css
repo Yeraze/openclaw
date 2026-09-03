@@ -21,6 +21,37 @@
   padding-inline: var(--settings-header-inline-padding, var(--space-4));
 }
 
+.content-header.plugins-hub-header .hub-page-header__tabs {
+  grid-area: tabs;
+  justify-self: start;
+}
+
+.content-header.plugins-hub-header .hub-page-header__title {
+  grid-area: title;
+}
+
+.content-header.plugins-hub-header .hub-page-header__actions {
+  grid-area: actions;
+}
+
+.plugins-tabs.oc-segmented {
+  width: max-content;
+  max-width: 100%;
+  align-self: start;
+  --track-color: transparent;
+  --indicator-color: transparent;
+}
+
+.plugins-tabs.oc-segmented wa-tab.hub-tab {
+  min-height: 0;
+  padding: 0;
+}
+
+.plugins-tabs.oc-segmented wa-tab.hub-tab::part(base) {
+  min-height: 28px;
+  padding: 3px var(--space-2);
+}
+
 .plugins-hub-header + .settings-workspace {
   /* The settings page already contributes the lower half of the tab rhythm. */
   margin-top: 0;
@@ -61,6 +92,22 @@
   gap: var(--space-2);
 }
 
+.settings-page.oc-app-surface .btn.your-plugins__icon-action {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.settings-page.oc-app-surface .btn.your-plugins__icon-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+
 .your-plugins__search {
   position: relative;
   width: min(280px, 42vw);
@@ -96,12 +143,6 @@
 
 .your-plugins__search-close {
   right: 3px;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  padding: 4px;
-  border-color: transparent;
-  background: transparent;
 }
 
 .settings-page.oc-app-surface .btn.your-plugins__search-close:hover:not(:disabled) {
@@ -230,6 +271,21 @@ a.your-plugins-card {
 .your-plugins__more {
   display: flex;
   justify-content: center;
+}
+
+.settings-page.oc-app-surface .btn.your-plugins__more-action {
+  min-height: 0;
+  padding: var(--space-1) var(--space-2);
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.settings-page.oc-app-surface .btn.your-plugins__more-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  filter: brightness(1.35);
 }
 
 @media (max-width: 900px) {
