@@ -488,10 +488,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/workboard");
       expect(new URL(page.url()).search).toBe("?from=plugins");
       await page.goto(`${server.baseUrl}plugins`);
-      const openAttentionSettings = page.getByRole("button", {
-        name: "Open settings for Attention A",
-        exact: true,
-      });
+      const openAttentionSettings = page.locator('[data-plugin-id="attention-a"]');
       await openAttentionSettings.focus();
       await page.keyboard.press("Enter");
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/attention-a");
@@ -518,9 +515,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       expect(await discoveryWorkboardCard.locator("wa-switch").count()).toBe(0);
       expect(new URL(page.url()).pathname).toBe("/plugins");
       expect(await gateway.getRequests("plugins.setEnabled")).toEqual([]);
-      await discoveryWorkboardCard
-        .getByRole("button", { name: "Open settings for Workboard", exact: true })
-        .click();
+      await discoveryWorkboardCard.click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/workboard");
     } finally {
       await context.close();
@@ -541,12 +536,10 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       const listCountBeforeFailure = (await gateway.getRequests("plugins.list")).length;
       await gateway.deferNext("plugins.list");
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      const failedListRequest = await waitForNextRequest(
-        gateway,
-        "plugins.list",
-        listCountBeforeFailure,
-      );
-      expect(requestParams(failedListRequest)).toEqual({});
+      const failedListRequest = await gateway.waitForRequest("plugins.list", {
+        after: listCountBeforeFailure,
+      });
+      expect(failedListRequest.params).toEqual({});
       await gateway.rejectDeferred("plugins.list", {
         code: "UNAVAILABLE",
         message: "Plugin inventory unavailable",
@@ -559,12 +552,10 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       const listCountBeforeRetry = (await gateway.getRequests("plugins.list")).length;
       await gateway.deferNext("plugins.list");
       await error.getByRole("button", { name: "Try again" }).click();
-      const retryListRequest = await waitForNextRequest(
-        gateway,
-        "plugins.list",
-        listCountBeforeRetry,
-      );
-      expect(requestParams(retryListRequest)).toEqual({});
+      const retryListRequest = await gateway.waitForRequest("plugins.list", {
+        after: listCountBeforeRetry,
+      });
+      expect(retryListRequest.params).toEqual({});
       await gateway.resolveDeferred("plugins.list", finalInventory);
       await error.waitFor({ state: "detached" });
       await page
