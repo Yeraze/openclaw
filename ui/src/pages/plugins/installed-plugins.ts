@@ -211,7 +211,10 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
                     }}
                     @keydown=${(event: KeyboardEvent) => {
                       if (event.key === "Escape") {
-                        props.onSearchOpenChange(false);
+                        event.preventDefault();
+                        if (event.currentTarget instanceof HTMLInputElement) {
+                          closeSearch(event.currentTarget);
+                        }
                       }
                     }}
                   />
@@ -219,7 +222,11 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
                     type="button"
                     class="btn btn--xs btn--icon installed-plugins__icon-action installed-plugins__search-close oc-action oc-action-icon oc-action-ghost"
                     aria-label=${t("common.close")}
-                    @click=${(event: MouseEvent) => closeSearch(event.currentTarget as HTMLElement)}
+                    @click=${(event: MouseEvent) => {
+                      if (event.currentTarget instanceof HTMLElement) {
+                        closeSearch(event.currentTarget);
+                      }
+                    }}
                   >
                     ${icons.x}
                   </button>
