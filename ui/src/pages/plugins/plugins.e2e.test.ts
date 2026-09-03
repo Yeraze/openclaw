@@ -468,7 +468,28 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await search.fill("Disabled 10");
       expect(await cards.count()).toBe(1);
       expect(await cards.first().getAttribute("data-plugin-id")).toBe("disabled-10");
-      await page.getByRole("button", { name: "Close", exact: true }).click();
+      const closeSearch = page.getByRole("button", { name: "Close", exact: true });
+      const closeAppearance = await closeSearch.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          width: rect.width,
+          height: rect.height,
+          borderColor: style.borderColor,
+          backgroundColor: style.backgroundColor,
+        };
+      });
+      expect(closeAppearance).toMatchObject({
+        width: 24,
+        height: 24,
+        borderColor: "rgba(0, 0, 0, 0)",
+        backgroundColor: "rgba(0, 0, 0, 0)",
+      });
+      await closeSearch.hover();
+      expect(await closeSearch.evaluate((element) => getComputedStyle(element).borderColor)).toBe(
+        "rgba(0, 0, 0, 0)",
+      );
+      await closeSearch.click();
       expect(await search.count()).toBe(0);
       expect(await cards.count()).toBe(12);
 

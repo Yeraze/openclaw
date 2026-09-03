@@ -96,6 +96,16 @@
 
 .your-plugins__search-close {
   right: 3px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.settings-page.oc-app-surface .btn.your-plugins__search-close:hover:not(:disabled) {
+  border-color: transparent;
 }
 
 .your-plugins__grid {
