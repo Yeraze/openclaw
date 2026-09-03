@@ -61,38 +61,38 @@
   flex: 0 0 auto;
 }
 
-/* ---------- Your plugins ---------- */
+/* ---------- Installed plugins ---------- */
 
-.your-plugins {
+.installed-plugins {
   display: grid;
   gap: var(--space-4);
 }
 
-.your-plugins__header {
+.installed-plugins__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
 
-.your-plugins__header h2,
-.your-plugins-card h3,
-.your-plugins-card p {
+.installed-plugins__header h2,
+.installed-plugins-card h3,
+.installed-plugins-card p {
   margin: 0;
 }
 
-.your-plugins__header h2 {
+.installed-plugins__header h2 {
   color: var(--text-strong);
   font-size: var(--control-ui-text-lg);
 }
 
-.your-plugins__actions {
+.installed-plugins__actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.settings-page.oc-app-surface .btn.your-plugins__icon-action {
+.settings-page.oc-app-surface .btn.installed-plugins__icon-action {
   width: 24px;
   min-width: 24px;
   height: 24px;
@@ -102,32 +102,32 @@
   color: var(--muted);
 }
 
-.settings-page.oc-app-surface .btn.your-plugins__icon-action:hover:not(:disabled) {
+.settings-page.oc-app-surface .btn.installed-plugins__icon-action:hover:not(:disabled) {
   border-color: transparent;
   background: transparent;
   color: var(--text);
 }
 
-.your-plugins__search {
+.installed-plugins__search {
   position: relative;
   width: min(280px, 42vw);
 }
 
-.your-plugins__search input {
+.installed-plugins__search input {
   width: 100%;
   height: var(--settings-control-height);
   padding-inline: 34px;
 }
 
-.your-plugins__search-icon,
-.your-plugins__search-close {
+.installed-plugins__search-icon,
+.installed-plugins__search-close {
   position: absolute;
   top: 50%;
   z-index: 1;
   transform: translateY(-50%);
 }
 
-.your-plugins__search-icon {
+.installed-plugins__search-icon {
   left: 10px;
   display: inline-flex;
   width: 16px;
@@ -135,27 +135,27 @@
   pointer-events: none;
 }
 
-.your-plugins__search-icon svg,
-.your-plugins__search-close svg {
+.installed-plugins__search-icon svg,
+.installed-plugins__search-close svg {
   width: 16px;
   height: 16px;
 }
 
-.your-plugins__search-close {
+.settings-page.oc-app-surface .btn.installed-plugins__search-close {
   right: 3px;
 }
 
-.settings-page.oc-app-surface .btn.your-plugins__search-close:hover:not(:disabled) {
+.settings-page.oc-app-surface .btn.installed-plugins__search-close:hover:not(:disabled) {
   border-color: transparent;
 }
 
-.your-plugins__grid {
+.installed-plugins__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
-a.your-plugins-card {
+a.installed-plugins-card {
   min-width: 0;
   display: grid;
   gap: var(--space-3);
@@ -172,20 +172,20 @@ a.your-plugins-card {
     transform var(--duration-fast) ease;
 }
 
-.your-plugins-card:hover {
+.installed-plugins-card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
 
-.your-plugins-card__head {
+.installed-plugins-card__head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
 }
 
-.your-plugins-card__art {
+.installed-plugins-card__art {
   width: 48px;
   height: 48px;
   flex: 0 0 48px;
@@ -197,51 +197,46 @@ a.your-plugins-card {
   background: var(--bg);
 }
 
-.your-plugins-card__art img {
+.installed-plugins-card__art img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.your-plugins-card__art img.plugins-icon {
+.installed-plugins-card__art img.plugins-icon {
   object-fit: contain;
   padding: 7px;
 }
 
-.your-plugins-card__art--fallback {
+.installed-plugins-card__art--fallback {
   border-color: transparent;
   background: linear-gradient(135deg, var(--plugins-art-a), var(--plugins-art-b));
-  color: rgb(255 255 255 / 92%);
+  color: var(--primary-foreground);
   font-family: var(--mono);
   font-size: var(--control-ui-text-sm);
   font-weight: 700;
 }
 
-.your-plugins-card__identity {
+.installed-plugins-card__identity {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
 
-.your-plugins-card__identity h3,
-.your-plugins-card__identity p {
+.installed-plugins-card__identity h3,
+.installed-plugins-card__identity p {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.your-plugins-card__identity h3 {
+.installed-plugins-card__identity h3 {
   color: var(--text-strong);
   font-size: var(--control-ui-text-md);
   font-weight: 600;
   white-space: nowrap;
 }
 
-.your-plugins-card:hover .your-plugins-card__identity h3,
-.your-plugins-card:focus-visible .your-plugins-card__identity h3 {
-  color: var(--accent);
-}
-
-.your-plugins-card__identity p {
+.installed-plugins-card__identity p {
   display: -webkit-box;
   color: var(--muted);
   font-size: var(--control-ui-text-sm);
@@ -250,8 +245,8 @@ a.your-plugins-card {
   -webkit-line-clamp: 2;
 }
 
-.your-plugins-card__error,
-.your-plugins-card__message {
+.installed-plugins-card__error,
+.installed-plugins-card__message {
   grid-column: 1 / -1;
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
@@ -260,20 +255,20 @@ a.your-plugins-card {
   line-height: 1.4;
 }
 
-.your-plugins-card__message--success {
+.installed-plugins-card__message--success {
   color: var(--ok);
 }
 
-.your-plugins-card__message--warning {
+.installed-plugins-card__message--warning {
   color: var(--warn);
 }
 
-.your-plugins__more {
+.installed-plugins__more {
   display: flex;
   justify-content: center;
 }
 
-.settings-page.oc-app-surface .btn.your-plugins__more-action {
+.settings-page.oc-app-surface .btn.installed-plugins__more-action {
   min-height: 0;
   padding: var(--space-1) var(--space-2);
   border-color: transparent;
@@ -282,20 +277,20 @@ a.your-plugins-card {
   font-size: var(--control-ui-text-sm);
 }
 
-.settings-page.oc-app-surface .btn.your-plugins__more-action:hover:not(:disabled) {
+.settings-page.oc-app-surface .btn.installed-plugins__more-action:hover:not(:disabled) {
   border-color: transparent;
   background: transparent;
   filter: brightness(1.35);
 }
 
 @media (max-width: 900px) {
-  .your-plugins__grid {
+  .installed-plugins__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  .your-plugins__grid {
+  .installed-plugins__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

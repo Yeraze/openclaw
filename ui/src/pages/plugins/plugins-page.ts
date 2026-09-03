@@ -33,6 +33,7 @@ import {
 } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { fetchPluginIconBlobUrl } from "./icon-loader.ts";
+import { renderInstalledPlugins } from "./installed-plugins.ts";
 import { confirmPluginUninstall } from "./plugin-lifecycle-confirmation.ts";
 import { PluginsConsentController } from "./plugins-consent-controller.ts";
 import { renderPluginsHubHeader } from "./plugins-hub-header.ts";
@@ -40,7 +41,6 @@ import { PLUGINS_HUB_PANEL_ID, type PluginsHubTab } from "./plugins-hub.ts";
 import { PluginsMcpController } from "./plugins-mcp-controller.ts";
 import { pluginArtPath } from "./presentation.ts";
 import { renderPlugins, type InstalledFilter, type PluginRowMessage } from "./view.ts";
-import { renderYourPlugins } from "./your-plugins.ts";
 
 type PluginsPageSurface = "discovery" | "settings";
 
@@ -575,7 +575,7 @@ class PluginsPage extends OpenClawLightDomElement {
               name="plugins"
               active
               aria-labelledby="plugins-tab-plugins"
-              >${renderYourPlugins({
+              >${renderInstalledPlugins({
                 connected: this.gateway.connected,
                 loading: this.loading,
                 result: this.result,

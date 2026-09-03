@@ -490,17 +490,15 @@ export function renderSettingsStatus(props: {
   const modifier = props.kind === "muted" ? "" : ` settings-status--${props.kind}`;
   return html`
     <span
-      class="settings-status${modifier}${
-        props.carapace ? ` oc-status ${CARAPACE_STATUS_CLASS[props.kind]}` : ""
-      }"
+      class="settings-status${modifier}${props.carapace
+        ? ` oc-status ${CARAPACE_STATUS_CLASS[props.kind]}`
+        : ""}"
     >
-      ${
-        props.dot === false
-          ? nothing
-          : html`<span
-              class="settings-status__dot ${props.carapace ? "oc-status-indicator" : ""}"
-            ></span>`
-      }
+      ${props.dot === false
+        ? nothing
+        : html`<span
+            class="settings-status__dot ${props.carapace ? "oc-status-indicator" : ""}"
+          ></span>`}
       <span class=${props.carapace ? "oc-status-label" : ""}>${props.label}</span>
     </span>
   `;

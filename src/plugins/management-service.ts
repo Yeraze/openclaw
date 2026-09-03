@@ -69,6 +69,32 @@ import {
   buildPluginDependencyStatus,
   projectPluginDependencyHealth,
 } from "./status-dependencies-core.js";
+import { setPluginEnabledInConfig } from "./toggle-config.js";
+import { collectClawPluginUninstallWarnings } from "./uninstall-claw-references.js";
+import {
+  prepareConfigForDisabledPluginSet,
+  recordPluginPackageUninstallPlan,
+} from "./uninstall-package-plan.js";
+import {
+  applyPluginUninstallDirectoryRemoval,
+  formatUninstallActionLabels,
+  planPluginUninstall,
+  pluginUninstallTargetExists,
+} from "./uninstall.js";
+
+function resolveManagedPluginState(params: {
+  enabled: boolean;
+  hasError: boolean;
+  setupMode: ReturnType<typeof resolvePluginConfigEnablement>["mode"];
+}): ManagedPluginCatalogEntry["state"] {
+  if (params.hasError) {
+    return "error";
+  }
+  if (params.enabled) {
+    return "enabled";
+  }
+  return params.setupMode === "missing" ? "needs-setup" : "disabled";
+}
 
 export type ManagedPluginInspection = PluginsInspectResult;
 
@@ -321,13 +347,11 @@ export const listManagedPlugins = withManagedPluginCache(
         name: presentation.name,
         installed: true,
         enabled,
-        state: error
-          ? "error"
-          : enabled
-            ? "enabled"
-            : setup.mode === "missing"
-              ? "needs-setup"
-              : "disabled",
+        state: resolveManagedPluginState({
+          enabled,
+          hasError: Boolean(error),
+          setupMode: setup.mode,
+        }),
         removable,
       };
       if (record.packageName) {

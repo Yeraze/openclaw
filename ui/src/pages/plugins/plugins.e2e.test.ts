@@ -124,7 +124,7 @@ function installedInventoryPlugin(
   };
 }
 
-const yourPluginsItems = [
+const installedPluginsItems = [
   installedInventoryPlugin("attention-b", {
     state: "error",
     error: "Manifest B failed",
@@ -155,7 +155,7 @@ const yourPluginsItems = [
   installedInventoryPlugin("enabled-a", { enabled: true, state: "enabled", order: 10 }),
 ];
 
-const yourPluginsInventory = inventory(yourPluginsItems);
+const installedPluginsInventory = inventory(installedPluginsItems);
 
 const initialInventory = inventory([workboardDisabled, lobsterPlugin, remoteIconPlugin]);
 const finalInventory = inventory([
@@ -402,14 +402,14 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       featureMethods: pluginMethods,
       methodResponses: {
         ...pluginMethodResponses(),
-        "plugins.list": yourPluginsInventory,
+        "plugins.list": installedPluginsInventory,
       },
     });
 
     try {
       await page.goto(`${server.baseUrl}plugins`);
-      await page.getByRole("heading", { name: "Your plugins", exact: true }).waitFor();
-      const cards = page.locator(".your-plugins-card");
+      await page.getByRole("heading", { name: "Installed plugins", exact: true }).waitFor();
+      const cards = page.locator(".installed-plugins-card");
       expect(await cards.count()).toBe(12);
       expect(
         await cards.evaluateAll((elements) =>
@@ -421,7 +421,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       );
       expect(await page.getByRole("searchbox", { name: "Search plugins" }).count()).toBe(0);
       const firstCard = page.locator('[data-plugin-id="attention-a"]');
-      expect(await firstCard.locator(".your-plugins-card__identity p").textContent()).toBe(
+      expect(await firstCard.locator(".installed-plugins-card__identity p").textContent()).toBe(
         "Operator-visible capability for attention-a.",
       );
       expect(await firstCard.textContent()).not.toContain("internal-category");
@@ -434,8 +434,17 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       });
       expect(geometry.aspectRatio).toBeGreaterThan(1.5);
       expect(geometry.cursor).toBe("pointer");
+      const titleColor = await firstCard
+        .locator(".installed-plugins-card__identity h3")
+        .evaluate((element) => getComputedStyle(element).color);
+      await firstCard.hover();
+      expect(
+        await firstCard
+          .locator(".installed-plugins-card__identity h3")
+          .evaluate((element) => getComputedStyle(element).color),
+      ).toBe(titleColor);
       expect(await firstCard.locator("wa-switch").count()).toBe(0);
-      const grid = page.locator(".your-plugins__grid");
+      const grid = page.locator(".installed-plugins__grid");
       const columnCount = () =>
         grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
       expect(await columnCount()).toBe(3);
@@ -453,7 +462,10 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         )
         .toBeLessThanOrEqual(1);
       await page.setViewportSize(desktopViewport);
-      await captureScreenshot(page, "12-your-plugins-desktop.png");
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      );
+      await captureScreenshot(page, "12-installed-plugins-desktop.png");
 
       const settingsButton = page.getByRole("button", { name: "Plugin settings", exact: true });
       const searchButton = page.getByRole("button", { name: "Search plugins", exact: true });
@@ -484,7 +496,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         .toBe(true);
       expect(
         await search
-          .locator("xpath=ancestor::*[contains(@class, 'your-plugins__actions')]")
+          .locator("xpath=ancestor::*[contains(@class, 'installed-plugins__actions')]")
           .count(),
       ).toBe(1);
       await search.fill("Disabled 10");

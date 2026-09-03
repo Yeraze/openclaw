@@ -220,7 +220,7 @@ suite.define(() => {
         expect(Math.abs((tabBox?.x ?? 0) - (titleBox?.x ?? 0))).toBeLessThanOrEqual(1);
         expect(pluginTabBox?.height ?? 0).toBeLessThanOrEqual(36);
         await expectActivePanelLabel(page, "plugins-tab-plugins");
-        await captureScreenshot(page, `${label}-01-your-plugins.png`);
+        await captureScreenshot(page, `${label}-01-installed-plugins.png`);
 
         await page.getByRole("tab", { name: "Skills", exact: true }).click();
         await waitForControlUiRoute(page, { pathname: "/skills", routeId: "skills" });
