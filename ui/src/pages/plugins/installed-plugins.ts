@@ -21,7 +21,7 @@ import {
   type PluginConsentState,
 } from "./consent-dialog.ts";
 
-const YOUR_PLUGINS_INITIAL_LIMIT = 12;
+const INSTALLED_PLUGINS_INITIAL_LIMIT = 12;
 
 function existingCatalogOrder(left: PluginCatalogItem, right: PluginCatalogItem): number {
   const featured = Number(Boolean(right.featured)) - Number(Boolean(left.featured));
@@ -59,7 +59,7 @@ function runtimePriority(plugin: PluginCatalogItem): number {
 }
 
 /** Actionable state owns inventory order; catalog metadata keeps ties deterministic. */
-function prioritizeYourPlugins(plugins: readonly PluginCatalogItem[]): PluginCatalogItem[] {
+function prioritizeInstalledPlugins(plugins: readonly PluginCatalogItem[]): PluginCatalogItem[] {
   return plugins
     .filter((plugin) => plugin.installed)
     .toSorted(
@@ -83,7 +83,7 @@ function matchesPlugin(plugin: PluginCatalogItem, query: string): boolean {
   ].some((value) => value?.toLocaleLowerCase().includes(needle));
 }
 
-export type YourPluginsProps = {
+export type InstalledPluginsProps = {
   connected: boolean;
   loading: boolean;
   result: PluginListResult | null;
@@ -111,11 +111,11 @@ export type YourPluginsProps = {
   onRetryConsentInspection: () => void;
 };
 
-function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): TemplateResult {
+function renderCard(plugin: PluginCatalogItem, props: InstalledPluginsProps): TemplateResult {
   const open = () => props.onOpenSettings(plugin.id);
   return html`
     <a
-      class="your-plugins-card oc-card oc-card-interactive"
+      class="installed-plugins-card oc-card oc-card-interactive"
       data-plugin-id=${plugin.id}
       data-plugin-status=${plugin.state}
       href=${props.settingsHref(plugin.id)}
@@ -127,25 +127,27 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
         open();
       }}
     >
-      <div class="your-plugins-card__head">
+      <div class="installed-plugins-card__head">
         ${renderArtTile(
           plugin.id,
           plugin.name,
           props.iconUrls[plugin.id],
           () => props.onIconError(plugin.id),
-          "your-plugins-card__art",
+          "installed-plugins-card__art",
         )}
-        <div class="your-plugins-card__identity">
+        <div class="installed-plugins-card__identity">
           <h3>${plugin.name}</h3>
           <p>${plugin.description || t("pluginsPage.optionalCapability")}</p>
         </div>
       </div>
       ${plugin.error
-        ? html`<p class="your-plugins-card__error" role="alert">
+        ? html`<p class="installed-plugins-card__error" role="alert">
             ${formatUiExternalText(plugin.error)}
           </p>`
         : plugin.state === "needs-setup"
-          ? html`<p class="your-plugins-card__message your-plugins-card__message--warning">
+          ? html`<p
+              class="installed-plugins-card__message installed-plugins-card__message--warning"
+            >
               ${t("pluginsPage.setupRequired")}
             </p>`
           : nothing}
@@ -153,30 +155,41 @@ function renderCard(plugin: PluginCatalogItem, props: YourPluginsProps): Templat
   `;
 }
 
-export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
-  const installed = prioritizeYourPlugins(props.result?.plugins ?? []);
+export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateResult {
+  const installed = prioritizeInstalledPlugins(props.result?.plugins ?? []);
   const filtered = props.searchOpen
     ? installed.filter((plugin) => matchesPlugin(plugin, props.query))
     : installed;
   const visible =
-    props.searchOpen || props.expanded ? filtered : filtered.slice(0, YOUR_PLUGINS_INITIAL_LIMIT);
+    props.searchOpen || props.expanded
+      ? filtered
+      : filtered.slice(0, INSTALLED_PLUGINS_INITIAL_LIMIT);
   const consentKey = props.consent
     ? props.consent.intent.kind === "install"
       ? props.consent.intent.installIdentity
       : props.consent.intent.rowKey
     : null;
+  const closeSearch = (source: Element) => {
+    const actions = source.closest(".installed-plugins__actions");
+    props.onSearchOpenChange(false);
+    queueMicrotask(() => {
+      actions?.querySelector<HTMLButtonElement>(".installed-plugins__search-trigger")?.focus();
+    });
+  };
 
   return html`${renderSettingsPage(
     html`
-      <section class="your-plugins" aria-labelledby="your-plugins-title">
-        <header class="your-plugins__header">
+      <section class="installed-plugins" aria-labelledby="installed-plugins-title">
+        <header class="installed-plugins__header">
           <div>
-            <h2 id="your-plugins-title">${t("pluginsPage.yourPluginsTitle")}</h2>
+            <h2 id="installed-plugins-title">${t("pluginsPage.installedPluginsTitle")}</h2>
           </div>
-          <div class="your-plugins__actions">
+          <div class="installed-plugins__actions">
             ${props.searchOpen
-              ? html`<div class="your-plugins__search">
-                  <span class="your-plugins__search-icon" aria-hidden="true">${icons.search}</span>
+              ? html`<div class="installed-plugins__search">
+                  <span class="installed-plugins__search-icon" aria-hidden="true"
+                    >${icons.search}</span
+                  >
                   <input
                     type="search"
                     class="oc-input"
@@ -204,16 +217,16 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
                   />
                   <button
                     type="button"
-                    class="btn btn--xs btn--icon your-plugins__icon-action your-plugins__search-close oc-action oc-action-icon oc-action-ghost"
+                    class="btn btn--xs btn--icon installed-plugins__icon-action installed-plugins__search-close oc-action oc-action-icon oc-action-ghost"
                     aria-label=${t("common.close")}
-                    @click=${() => props.onSearchOpenChange(false)}
+                    @click=${(event: MouseEvent) => closeSearch(event.currentTarget as HTMLElement)}
                   >
                     ${icons.x}
                   </button>
                 </div>`
               : html`<button
                   type="button"
-                  class="btn btn--sm btn--icon your-plugins__icon-action your-plugins__search-trigger oc-action oc-action-icon oc-action-ghost"
+                  class="btn btn--sm btn--icon installed-plugins__icon-action installed-plugins__search-trigger oc-action oc-action-icon oc-action-ghost"
                   aria-label=${t("pluginsPage.searchLabel")}
                   aria-expanded="false"
                   @click=${() => props.onSearchOpenChange(true)}
@@ -222,7 +235,7 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
                 </button>`}
             <button
               type="button"
-              class="btn btn--sm btn--icon your-plugins__icon-action oc-action oc-action-icon oc-action-ghost"
+              class="btn btn--sm btn--icon installed-plugins__icon-action oc-action oc-action-icon oc-action-ghost"
               aria-label=${t("pluginsPage.pluginSettings")}
               @click=${() => props.onOpenSettings()}
             >
@@ -256,22 +269,23 @@ export function renderYourPlugins(props: YourPluginsProps): TemplateResult {
                       : t("pluginsPage.noInstalledTitle"),
                     { carapace: true },
                   )
-                : html`<div class="your-plugins__grid">
+                : html`<div class="installed-plugins__grid">
                     ${repeat(
                       visible,
                       (plugin) => plugin.id,
                       (plugin) => renderCard(plugin, props),
                     )}
                   </div>`}
-        ${!props.searchOpen && (installed.length > YOUR_PLUGINS_INITIAL_LIMIT || props.expanded)
-          ? html`<div class="your-plugins__more">
+        ${!props.searchOpen &&
+        (installed.length > INSTALLED_PLUGINS_INITIAL_LIMIT || props.expanded)
+          ? html`<div class="installed-plugins__more">
               <button
                 type="button"
-                class="btn btn--sm your-plugins__more-action oc-action oc-action-ghost"
+                class="btn btn--sm installed-plugins__more-action oc-action oc-action-ghost"
                 @click=${() => props.onExpandedChange(!props.expanded)}
               >
                 ${props.expanded
-                  ? t("pluginsPage.backToYourPlugins")
+                  ? t("pluginsPage.hideInstalledPlugins")
                   : t("pluginsPage.showAllPlugins", { count: String(installed.length) })}
               </button>
             </div>`

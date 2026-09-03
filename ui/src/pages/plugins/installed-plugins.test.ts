@@ -4,10 +4,10 @@ import { expectDefined } from "@openclaw/normalization-core";
 import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "../../i18n/index.ts";
+import { renderInstalledPlugins, type InstalledPluginsProps } from "./installed-plugins.ts";
 import { createPlugin, createResult } from "./view.test-support.ts";
-import { renderYourPlugins, type YourPluginsProps } from "./your-plugins.ts";
 
-function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps {
+function baseProps(overrides: Partial<InstalledPluginsProps> = {}): InstalledPluginsProps {
   return {
     connected: true,
     loading: false,
@@ -38,10 +38,10 @@ function baseProps(overrides: Partial<YourPluginsProps> = {}): YourPluginsProps 
   };
 }
 
-function mount(props: YourPluginsProps): HTMLDivElement {
+function mount(props: InstalledPluginsProps): HTMLDivElement {
   const container = document.createElement("div");
   document.body.append(container);
-  render(renderYourPlugins(props), container);
+  render(renderInstalledPlugins(props), container);
   return container;
 }
 
@@ -51,7 +51,7 @@ function visiblePluginIds(container: Element): string[] {
   );
 }
 
-describe("renderYourPlugins", () => {
+describe("renderInstalledPlugins", () => {
   beforeEach(async () => {
     await i18n.setLocale("en");
   });
@@ -113,7 +113,7 @@ describe("renderYourPlugins", () => {
     ];
     let props = baseProps({ result: createResult(plugins) });
     const container = mount(props);
-    const rerender = () => render(renderYourPlugins(props), container);
+    const rerender = () => render(renderInstalledPlugins(props), container);
     props = {
       ...props,
       onExpandedChange: (expanded) => {
@@ -155,14 +155,14 @@ describe("renderYourPlugins", () => {
       "expanded inventory search",
     );
     await Promise.resolve();
-    expect(search.closest(".your-plugins__actions")).not.toBeNull();
+    expect(search.closest(".installed-plugins__actions")).not.toBeNull();
     expect(document.activeElement).toBe(search);
     search.value = "disabled 10";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     expect(visiblePluginIds(container)).toEqual(["disabled-10"]);
 
     const closeSearch = expectDefined(
-      container.querySelector<HTMLButtonElement>('.your-plugins__search [aria-label="Close"]'),
+      container.querySelector<HTMLButtonElement>('.installed-plugins__search [aria-label="Close"]'),
       "close search button",
     );
     closeSearch.click();
@@ -195,9 +195,12 @@ describe("renderYourPlugins", () => {
 
     expect(container.querySelector(".settings-page.oc-app-surface")).not.toBeNull();
     expect(
-      container.querySelector(".your-plugins-card.oc-card.oc-card-interactive"),
+      container.querySelector(".installed-plugins-card.oc-card.oc-card-interactive"),
     ).not.toBeNull();
-    expect(container.querySelector(".your-plugins__header p")).toBeNull();
+    expect(container.querySelector(".installed-plugins__header p")).toBeNull();
+    expect(container.querySelector("#installed-plugins-title")?.textContent).toBe(
+      "Installed plugins",
+    );
   });
 
   it("routes cards and the gear to settings without inline mutation controls or icon tooltips", () => {
@@ -224,7 +227,7 @@ describe("renderYourPlugins", () => {
 
     const settings = expectDefined(
       container.querySelector<HTMLButtonElement>(
-        '.your-plugins__header [aria-label="Plugin settings"]',
+        '.installed-plugins__header [aria-label="Plugin settings"]',
       ),
       "settings button",
     );
