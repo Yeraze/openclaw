@@ -1,6 +1,6 @@
 import type { PluginDiscoveryEntry, PluginDiscoveryResult } from "../lib/plugins/index.ts";
 
-export const memoryDiscoveryPlugin = {
+const memoryDiscoveryPlugin = {
   id: "ch_bWVtb3J5LXBsdXM",
   catalog: {
     name: "Memory Plus",
@@ -43,7 +43,7 @@ export const matrixDiscoveryPlugin = {
   },
 } satisfies PluginDiscoveryEntry;
 
-export const telegramDiscoveryPlugin = {
+const telegramDiscoveryPlugin = {
   ...matrixDiscoveryPlugin,
   id: "ch_QG9wZW5jbGF3L3RlbGVncmFt",
   catalog: {
