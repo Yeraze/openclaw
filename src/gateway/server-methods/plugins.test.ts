@@ -48,7 +48,9 @@ vi.mock("../../infra/clawhub-plugin-catalog.js", () => ({
   fetchClawHubPluginDetail: (...args: unknown[]) => catalogMocks.detail(...args),
 }));
 
-const { pluginsHandlers } = await import("./plugins.js");
+const { pluginsHandlers: pluginReadHandlers } = await import("./plugins.js");
+const { pluginMutationHandlers } = await import("./plugins-mutations.js");
+const pluginsHandlers = { ...pluginReadHandlers, ...pluginMutationHandlers };
 
 async function callHandler(
   method: string,

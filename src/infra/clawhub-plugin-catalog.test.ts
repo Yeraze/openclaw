@@ -12,6 +12,10 @@ function jsonResponse(value: unknown): Response {
   });
 }
 
+function requestUrl(input: string | URL | Request): string {
+  return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+}
+
 const remotePlugin = {
   name: "memory-plus",
   displayName: "Memory Plus",
@@ -30,7 +34,7 @@ describe("ClawHub plugin catalog client", () => {
   it("browses the combined plugin endpoint with an opaque cursor", async () => {
     let requestedUrl = "";
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      requestedUrl = String(input);
+      requestedUrl = requestUrl(input);
       return jsonResponse({ items: [remotePlugin], nextCursor: "pkgplugins:{opaque}" });
     });
 
@@ -74,7 +78,7 @@ describe("ClawHub plugin catalog client", () => {
   it("uses plugin search without inventing pagination", async () => {
     let requestedUrl = "";
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      requestedUrl = String(input);
+      requestedUrl = requestUrl(input);
       return jsonResponse({ results: [{ score: 9, package: remotePlugin }] });
     });
 
@@ -178,7 +182,7 @@ describe("ClawHub plugin catalog client", () => {
   it("reads package detail through the canonical package endpoint", async () => {
     let requestedUrl = "";
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      requestedUrl = String(input);
+      requestedUrl = requestUrl(input);
       return jsonResponse({ package: remotePlugin });
     });
 
