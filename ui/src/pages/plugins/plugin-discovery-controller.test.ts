@@ -76,6 +76,23 @@ it("switches filtered tabs to All when starting a unified search", async () => {
   );
 });
 
+it("pages through retained unified-search overflow without another request", async () => {
+  vi.useFakeTimers();
+  const matches = Array.from({ length: 26 }, (_, index) => entry(index));
+  const { controller, request } = setup([{ items: matches }]);
+
+  controller.updateQuery("plugin");
+  await vi.runAllTimersAsync();
+  expect(controller.result?.items).toHaveLength(25);
+
+  await controller.nextPage();
+  expect(controller.result?.items.map((item) => item.id)).toEqual(["plugin-25"]);
+
+  await controller.previousPage();
+  expect(controller.result?.items).toHaveLength(25);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 it("consumes cursorless Bundled overflow without requesting the first page again", async () => {
   const bundled = Array.from({ length: 26 }, (_, index) => entry(index));
   const { controller, request } = setup([{ items: bundled }]);

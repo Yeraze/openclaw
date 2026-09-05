@@ -139,15 +139,14 @@ export class PluginDiscoveryController {
   }
 
   get canGoPrevious(): boolean {
-    return !this.committedQuery && this.pageIndex > 0;
+    return this.pageIndex > 0;
   }
 
   get canGoNext(): boolean {
     return (
-      !this.committedQuery &&
-      (this.pageIndex + 1 < this.pages.length ||
-        this.overflow.length > 0 ||
-        Boolean(this.nextCursor))
+      this.pageIndex + 1 < this.pages.length ||
+      this.overflow.length > 0 ||
+      (!this.committedQuery && Boolean(this.nextCursor))
     );
   }
 
@@ -355,7 +354,7 @@ export class PluginDiscoveryController {
 
   private async loadNextPage(targetIndex: number): Promise<void> {
     const scope = this.gateway.capture();
-    if (!scope || this.committedQuery) {
+    if (!scope) {
       return;
     }
     const requestEpoch = ++this.pageRequestEpoch;
@@ -367,7 +366,7 @@ export class PluginDiscoveryController {
         client: scope.client,
         intent: this.intent,
         category: this.category,
-        query: "",
+        query: this.committedQuery,
         overflow: this.overflow,
         cursor: this.nextCursor,
       });
