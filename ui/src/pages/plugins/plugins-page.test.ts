@@ -99,6 +99,7 @@ describe("PluginsPage", () => {
       expect(page.querySelector('[role="alert"]')?.textContent).toContain("catalog unavailable"),
     );
     expect(page.textContent?.match(/catalog unavailable/gu)).toHaveLength(1);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("refreshes the authoritative catalog after a same-client reconnect", async () => {
