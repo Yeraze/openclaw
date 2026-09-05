@@ -353,6 +353,7 @@ describe("routeIdFromPath", () => {
     expect(routeIdFromPath("/dreams")).toBeNull();
     expect(routeIdFromPath("/settings/plugins")).toBe("plugin-settings");
     expect(routeIdFromPath("/plugins")).toBe("plugins");
+    expect(routeIdFromPath("/plugins/ch_bWF0cml4")).toBe("plugins");
     expect(routeIdFromPath("/settings/about")).toBe("about");
     expect(routeIdFromPath("/settings/labs")).toBe("labs");
     expect(routeIdFromPath("/labs")).toBeNull();

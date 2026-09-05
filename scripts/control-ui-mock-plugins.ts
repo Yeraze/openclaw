@@ -4,6 +4,7 @@ import type {
   PluginCatalogEntry,
   PluginDeclaredSurface,
   PluginsCatalogBrowseResult,
+  PluginsCatalogCategoriesResult,
   PluginsInspectResult,
 } from "../packages/gateway-protocol/src/schema/plugins.js";
 import type { ControlUiMockGateway } from "../ui/src/test-helpers/control-ui-e2e.ts";
@@ -22,6 +23,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
     downloads: number;
     pluginId?: string;
     enabled?: boolean;
+    categories?: string[];
+    icon?: string;
   }): PluginsCatalogBrowseResult["items"][number] => ({
     id: `ch_${Buffer.from(params.packageName, "utf8").toString("base64url")}`,
     catalog: {
@@ -30,7 +33,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
       family: "code-plugin",
       author: params.author,
       official: params.official,
-      categories: [],
+      categories: params.categories ?? [],
+      ...(params.icon ? { icon: params.icon } : {}),
       downloads: params.downloads,
     },
     local: params.pluginId
@@ -61,6 +65,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         official: true,
         downloads: 176_431,
         pluginId: "whatsapp",
+        categories: ["channels"],
+        icon: "message-circle",
       }),
       entry({
         packageName: "@openclaw/matrix",
@@ -69,6 +75,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         author: "openclaw",
         official: true,
         downloads: 52_201,
+        categories: ["channels"],
+        icon: "message-square",
       }),
       entry({
         packageName: "@openclaw/codex",
@@ -77,6 +85,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         author: "openclaw",
         official: true,
         downloads: 36_956,
+        categories: ["context"],
+        icon: "book-open",
       }),
       entry({
         packageName: "@gendigital/sage-openclaw",
@@ -85,6 +95,8 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         author: "gendigital",
         official: false,
         downloads: 19_609,
+        categories: ["tools"],
+        icon: "shield",
       }),
       entry({
         packageName: "@openclaw/discord",
@@ -95,6 +107,20 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         downloads: 13_253,
         pluginId: "discord",
         enabled: false,
+        categories: ["channels"],
+        icon: "message-circle",
+      }),
+      entry({
+        packageName: "@openclaw/telegram",
+        name: "Telegram",
+        summary: "OpenClaw Telegram channel plugin for groups and direct messages.",
+        author: "openclaw",
+        official: true,
+        downloads: 12_847,
+        pluginId: "telegram",
+        enabled: false,
+        categories: ["channels"],
+        icon: "message-circle",
       }),
       entry({
         packageName: "@openclaw/deepseek-provider",
@@ -103,7 +129,100 @@ export function buildPluginDiscoveryMock(): PluginsCatalogBrowseResult {
         author: "openclaw",
         official: true,
         downloads: 10_742,
+        categories: ["models"],
+        icon: "brain",
       }),
+    ],
+  };
+}
+
+export function buildPluginDiscoveryCategoriesMock(): PluginsCatalogCategoriesResult {
+  return {
+    categories: [
+      {
+        slug: "channels",
+        label: "Channels",
+        description: "Messaging and collaboration channel integrations.",
+        icon: "message-circle",
+        order: 0,
+      },
+      {
+        slug: "models",
+        label: "Models",
+        description: "Model providers, inference backends, and model routing.",
+        icon: "brain",
+        order: 1,
+      },
+      {
+        slug: "memory",
+        label: "Memory",
+        description: "Memory providers, embeddings, and retrieval.",
+        icon: "database",
+        order: 2,
+      },
+      {
+        slug: "context",
+        label: "Context",
+        description: "Context engines and context management.",
+        icon: "book-open",
+        order: 3,
+      },
+      {
+        slug: "voice",
+        label: "Voice",
+        description: "Speech synthesis, transcription, voice calls, and audio interaction.",
+        icon: "message-square",
+        order: 4,
+      },
+      {
+        slug: "media",
+        label: "Media",
+        description: "Image, video, audio, and other media understanding or generation.",
+        icon: "palette",
+        order: 5,
+      },
+      {
+        slug: "web",
+        label: "Web",
+        description: "Web search, browsing, fetching, research, and information retrieval.",
+        icon: "globe",
+        order: 6,
+      },
+      {
+        slug: "tools",
+        label: "Tools",
+        description: "Agent tools, workflows, scheduled work, and service automation.",
+        icon: "wrench",
+        order: 7,
+      },
+      {
+        slug: "runtime",
+        label: "Runtime",
+        description: "Developer tooling, agent runtimes, coding, testing, and execution backends.",
+        icon: "git-branch",
+        order: 8,
+      },
+      {
+        slug: "gateway",
+        label: "Gateway",
+        description: "Gateway extensions, deployment, observability, and operational tooling.",
+        icon: "activity",
+        order: 9,
+      },
+      {
+        slug: "security",
+        label: "Security",
+        description: "Authentication, authorization, security controls, and policy enforcement.",
+        icon: "shield",
+        order: 10,
+      },
+      {
+        slug: "other",
+        label: "Other",
+        description: "Plugins that do not yet fit another browse category.",
+        icon: "package",
+        order: 11,
+      },
     ],
   };
 }
@@ -115,6 +234,7 @@ export function buildPluginCatalogMock(options: PluginCatalogMockOptions = {}) {
     description: string;
     category: string;
     origin: string;
+    packageName?: string;
     installed: boolean;
     enabled?: boolean;
     featured?: boolean;
@@ -123,6 +243,11 @@ export function buildPluginCatalogMock(options: PluginCatalogMockOptions = {}) {
   }): PluginCatalogEntry => ({
     id: params.id,
     name: params.name,
+    ...(params.packageName
+      ? { packageName: params.packageName }
+      : params.origin === "bundled"
+        ? { packageName: `@openclaw/${params.id}` }
+        : {}),
     description: params.description,
     version: "1.4.0",
     origin: params.origin,
@@ -160,6 +285,7 @@ export function buildPluginCatalogMock(options: PluginCatalogMockOptions = {}) {
       description: "Bridge agents into Discord servers and DMs.",
       category: "channel",
       origin: "global",
+      packageName: "@openclaw/discord",
       installed: true,
       enabled: false,
       hasIcon: true,

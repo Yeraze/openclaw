@@ -5,6 +5,16 @@ import {
   pathForRoute,
   restoreBridgedRouteLocation,
 } from "../../app-route-paths.ts";
+import type { ApplicationContext, ApplicationGatewaySnapshot } from "../../app/context.ts";
+import type { PluginListResult } from "../../lib/plugins/index.ts";
+
+export type PluginsRouteData = {
+  gateway: ApplicationContext["gateway"];
+  gatewaySnapshot: ApplicationGatewaySnapshot;
+  result: PluginListResult | null;
+  error: string | null;
+  location: RouteLocation;
+};
 
 export function pluginsRouteLocation(location: RouteLocation): RouteLocation {
   return restoreBridgedRouteLocation(
