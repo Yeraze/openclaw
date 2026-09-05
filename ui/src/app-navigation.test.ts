@@ -269,8 +269,8 @@ describe("subtitleForRoute", () => {
       tasks: "Background tasks: subagents, automation runs, CLI.",
       agents: "Workspaces, tools, identities.",
       skills: "Manage agent skills and find new ones on ClawHub.",
-      plugins: "Manage plugins and add capabilities from ClawHub.",
-      "plugin-settings": "Manage plugins and add capabilities from ClawHub.",
+      plugins: "Browse installed plugins and open their settings.",
+      "plugin-settings": "Browse installed plugins and open their settings.",
       "skill-workshop":
         "The skills your agent uses now, suggestions waiting for review, and past decisions.",
       devices: "Paired devices, pairing approvals, and exec bindings.",
