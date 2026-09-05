@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { consume } from "@lit/context";
 import { initialState, Task, TaskStatus } from "@lit/task";
 import { html, nothing, type PropertyValues } from "lit";
@@ -7,6 +8,7 @@ import {
   pathForPluginCatalogEntry,
   pathForPluginSettings,
   pathForRoute,
+  pluginCatalogIdFromPath,
   pluginSettingsIdFromPath,
 } from "../../app-route-paths.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
@@ -18,7 +20,9 @@ import { t } from "../../i18n/index.ts";
 import { formatUiError, formatUiExternalText } from "../../lib/format-error.ts";
 import { inspectPlugin } from "../../lib/plugins/capability-consent-error.ts";
 import {
+  loadPluginDiscoveryDetail,
   uninstallPlugin,
+  type PluginDiscoveryDetailResult,
   type PluginListResult,
   type PluginMutationResult,
   type PluginsInspectResult,
@@ -30,6 +34,7 @@ import {
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { SubscriptionsController } from "../../lit/subscriptions-controller.ts";
 import "../../styles/plugins.css";
+import { renderPluginCatalogDetail, type PluginCatalogDetailTab } from "./catalog-detail.ts";
 import { renderPluginCatalogResults } from "./catalog-results.ts";
 import { renderPluginConsentDialog } from "./consent-dialog.ts";
 import { renderInstalledPlugins } from "./installed-plugins.ts";
@@ -73,6 +78,12 @@ export class PluginsPage extends OpenClawLightDomElement {
   } | null = null;
   @state() private iconUrls: Record<string, string> = {};
   @state() private pageNotice: PluginRowMessage | null = null;
+  @state() private catalogDetail: {
+    id: string;
+    result: PluginDiscoveryDetailResult | null;
+    error: string | null;
+  } | null = null;
+  @state() private catalogDetailTab: PluginCatalogDetailTab = "readme";
   private configAutoSaveStatus = this.context?.runtimeConfig.state.configAutoSaveStatus ?? "idle";
   private pluginConfigEditPending = false;
   private routeDataConsumed = false;
@@ -220,6 +231,11 @@ export class PluginsPage extends OpenClawLightDomElement {
         });
       }
       event.stopPropagation();
+      return;
+    }
+    if (this.catalogDetail) {
+      this.closeCatalogDetail();
+      event.stopPropagation();
     }
   };
 
@@ -260,9 +276,17 @@ export class PluginsPage extends OpenClawLightDomElement {
     if (shouldRefreshAfterChange) {
       void this.refreshCatalog();
       if (this.surface === "discovery") {
-        void this.discovery.refresh();
-        void this.discovery.refreshCategories();
-        void this.discovery.refreshFeatured();
+        const catalogId = pluginCatalogIdFromPath(
+          this.routeData?.location.pathname ?? "",
+          this.context.basePath,
+        );
+        if (catalogId) {
+          void this.showCatalogDetail(catalogId);
+        } else {
+          void this.discovery.refresh();
+          void this.discovery.refreshCategories();
+          void this.discovery.refreshFeatured();
+        }
       }
     } else {
       this.ensureInitialData();
@@ -278,6 +302,10 @@ export class PluginsPage extends OpenClawLightDomElement {
     const detailPluginId =
       this.surface === "settings"
         ? pluginSettingsIdFromPath(data.location.pathname, this.context.basePath)
+        : null;
+    const catalogId =
+      this.surface === "discovery"
+        ? pluginCatalogIdFromPath(data.location.pathname, this.context.basePath)
         : null;
     // Route location is UI state, not Gateway data. Apply it even when the
     // catalog snapshot is stale so deep links do not fall back to Installed.
@@ -296,6 +324,9 @@ export class PluginsPage extends OpenClawLightDomElement {
     if (detailPluginId !== this.detail?.pluginId) {
       void this.showDetails(detailPluginId);
     }
+    if (catalogId !== this.catalogDetail?.id) {
+      void this.showCatalogDetail(catalogId);
+    }
     this.ensureInitialData();
   }
 
@@ -306,6 +337,7 @@ export class PluginsPage extends OpenClawLightDomElement {
     }
     // Inspection results belong to one connection epoch, including same-client reconnects.
     this.detail = null;
+    this.catalogDetail = null;
     this.consentController.reset();
   }
 
@@ -340,7 +372,17 @@ export class PluginsPage extends OpenClawLightDomElement {
       void this.refreshCatalog();
     }
     if (this.surface === "discovery") {
-      this.discovery.ensureInitial();
+      const catalogId = pluginCatalogIdFromPath(
+        this.routeData?.location.pathname ?? "",
+        this.context.basePath,
+      );
+      if (catalogId) {
+        if (catalogId !== this.catalogDetail?.id) {
+          void this.showCatalogDetail(catalogId);
+        }
+      } else {
+        this.discovery.ensureInitial();
+      }
     }
   }
 
@@ -441,6 +483,37 @@ export class PluginsPage extends OpenClawLightDomElement {
         this.detail = { ...detail, error: formatUiError(error) };
       }
     }
+  }
+
+  private async showCatalogDetail(id: string | null) {
+    const detail = id ? { id, result: null, error: null } : null;
+    this.catalogDetail = detail;
+    this.catalogDetailTab = "readme";
+    if (!detail) {
+      return;
+    }
+    const scope = this.gateway.capture();
+    if (!scope) {
+      return;
+    }
+    try {
+      const result = await loadPluginDiscoveryDetail(scope.client, detail.id);
+      if (this.gateway.isCurrent(scope) && this.catalogDetail === detail) {
+        this.catalogDetail = { ...detail, result };
+      }
+    } catch (error) {
+      if (this.gateway.isCurrent(scope) && this.catalogDetail === detail) {
+        this.catalogDetail = { ...detail, error: formatUiError(error) };
+      }
+    }
+  }
+
+  private closeCatalogDetail() {
+    this.catalogDetail = null;
+    this.catalogDetailTab = "readme";
+    this.context.navigate("plugins", {
+      pathname: pathForRoute("plugins", this.context.basePath),
+    });
   }
 
   private updateEnabled(pluginId: string, enabled: boolean, key?: string): Promise<void> {
@@ -546,82 +619,97 @@ export class PluginsPage extends OpenClawLightDomElement {
                 name="plugins"
                 active
                 aria-labelledby="plugins-tab-plugins"
-                >${renderInstalledPlugins({
-                  connected: this.gateway.connected,
-                  loading: this.loading,
-                  result: this.result,
-                  error: this.error,
-                  expanded: this.inventoryExpanded,
-                  searchOpen: this.inventorySearchOpen,
-                  query: this.query,
-                  busy: this.busy,
-                  iconUrls: this.iconUrls,
-                  attributions: this.discovery.attributions,
-                  canMutate: this.canMutate(),
-                  mutationBlockedReason: blockedReason,
-                  consent: this.consentController.consent,
-                  consentInspection: this.consentController.inspection,
-                  consentInspectionLoading: this.consentController.inspectionLoading,
-                  consentInspectionError: this.consentController.inspectionError,
-                  onExpandedChange: (expanded) => {
-                    this.inventoryExpanded = expanded;
-                  },
-                  onSearchOpenChange: (open) => {
-                    this.inventorySearchOpen = open;
-                    if (!open) {
-                      this.query = "";
-                    }
-                  },
-                  onQueryChange: (query) => {
-                    this.query = query;
-                  },
-                  onRefresh: () => void this.refreshCatalog(),
-                  settingsHref: (pluginId) =>
-                    `${pathForPluginSettings(pluginId, this.context.basePath)}?from=plugins`,
-                  onOpenSettings: (pluginId) => {
-                    this.context.navigate("plugin-settings", {
-                      pathname: pluginId
-                        ? pathForPluginSettings(pluginId, this.context.basePath)
-                        : pathForRoute("plugin-settings", this.context.basePath),
-                      search: pluginId ? "?from=plugins" : "",
-                    });
-                  },
-                  onIconError: (pluginId) => this.pluginIcons.handleError(pluginId),
-                  onCancelConsent: () => this.consentController.close(),
-                  onConfirmConsent: () => this.consentController.confirm(),
-                  onRetryConsentInspection: () => void this.consentController.inspect(),
-                })}${renderPluginCatalogResults({
-                  connected: this.gateway.connected,
-                  loading: this.discovery.loading,
-                  paging: this.discovery.paging,
-                  pageNumber: this.discovery.pageNumber,
-                  canGoPrevious: this.discovery.canGoPrevious,
-                  canGoNext: this.discovery.canGoNext,
-                  result: this.discovery.result,
-                  error: this.discovery.error,
-                  categories: this.discovery.categories,
-                  categoriesError: this.discovery.categoriesError,
-                  featured: this.discovery.featured,
-                  featuredLoading: this.discovery.featuredLoading,
-                  featuredError: this.discovery.featuredError,
-                  intent: this.discovery.intent,
-                  category: this.discovery.category,
-                  query: this.discovery.query,
-                  entryHref: (id) => pathForPluginCatalogEntry(id, this.context.basePath),
-                  onIntentChange: (intent) => this.discovery.selectIntent(intent),
-                  onCategoryChange: (category) => this.discovery.selectCategory(category),
-                  onQueryChange: (query) => this.discovery.updateQuery(query),
-                  onOpenEntry: (id) => {
-                    this.context.navigate("plugins", {
-                      pathname: pathForPluginCatalogEntry(id, this.context.basePath),
-                    });
-                  },
-                  onPreviousPage: () => void this.discovery.previousPage(),
-                  onNextPage: () => void this.discovery.nextPage(),
-                  onRetry: () => void this.discovery.refresh(),
-                  onRetryCategories: () => void this.discovery.refreshCategories(),
-                  onRetryFeatured: () => void this.discovery.refreshFeatured(),
-                })}</wa-tab-panel
+                >${
+                  this.catalogDetail
+                    ? renderPluginCatalogDetail({
+                        connected: this.gateway.connected,
+                        result: this.catalogDetail.result,
+                        error: this.catalogDetail.error,
+                        tab: this.catalogDetailTab,
+                        backHref: pathForRoute("plugins", this.context.basePath),
+                        onBack: () => this.closeCatalogDetail(),
+                        onRetry: () => void this.showCatalogDetail(this.catalogDetail?.id ?? null),
+                        onTabChange: (tab) => {
+                          this.catalogDetailTab = tab;
+                        },
+                      })
+                    : html`${renderInstalledPlugins({
+                        connected: this.gateway.connected,
+                        loading: this.loading,
+                        result: this.result,
+                        error: this.error,
+                        expanded: this.inventoryExpanded,
+                        searchOpen: this.inventorySearchOpen,
+                        query: this.query,
+                        busy: this.busy,
+                        iconUrls: this.iconUrls,
+                        attributions: this.discovery.attributions,
+                        canMutate: this.canMutate(),
+                        mutationBlockedReason: blockedReason,
+                        consent: this.consentController.consent,
+                        consentInspection: this.consentController.inspection,
+                        consentInspectionLoading: this.consentController.inspectionLoading,
+                        consentInspectionError: this.consentController.inspectionError,
+                        onExpandedChange: (expanded) => {
+                          this.inventoryExpanded = expanded;
+                        },
+                        onSearchOpenChange: (open) => {
+                          this.inventorySearchOpen = open;
+                          if (!open) {
+                            this.query = "";
+                          }
+                        },
+                        onQueryChange: (query) => {
+                          this.query = query;
+                        },
+                        onRefresh: () => void this.refreshCatalog(),
+                        settingsHref: (pluginId) =>
+                          `${pathForPluginSettings(pluginId, this.context.basePath)}?from=plugins`,
+                        onOpenSettings: (pluginId) => {
+                          this.context.navigate("plugin-settings", {
+                            pathname: pluginId
+                              ? pathForPluginSettings(pluginId, this.context.basePath)
+                              : pathForRoute("plugin-settings", this.context.basePath),
+                            search: pluginId ? "?from=plugins" : "",
+                          });
+                        },
+                        onIconError: (pluginId) => this.pluginIcons.handleError(pluginId),
+                        onCancelConsent: () => this.consentController.close(),
+                        onConfirmConsent: () => this.consentController.confirm(),
+                        onRetryConsentInspection: () => void this.consentController.inspect(),
+                      })}${renderPluginCatalogResults({
+                        connected: this.gateway.connected,
+                        loading: this.discovery.loading,
+                        paging: this.discovery.paging,
+                        pageNumber: this.discovery.pageNumber,
+                        canGoPrevious: this.discovery.canGoPrevious,
+                        canGoNext: this.discovery.canGoNext,
+                        result: this.discovery.result,
+                        error: this.discovery.error,
+                        categories: this.discovery.categories,
+                        categoriesError: this.discovery.categoriesError,
+                        featured: this.discovery.featured,
+                        featuredLoading: this.discovery.featuredLoading,
+                        featuredError: this.discovery.featuredError,
+                        intent: this.discovery.intent,
+                        category: this.discovery.category,
+                        query: this.discovery.query,
+                        entryHref: (id) => pathForPluginCatalogEntry(id, this.context.basePath),
+                        onIntentChange: (intent) => this.discovery.selectIntent(intent),
+                        onCategoryChange: (category) => this.discovery.selectCategory(category),
+                        onQueryChange: (query) => this.discovery.updateQuery(query),
+                        onOpenEntry: (id) => {
+                          this.context.navigate("plugins", {
+                            pathname: pathForPluginCatalogEntry(id, this.context.basePath),
+                          });
+                        },
+                        onPreviousPage: () => void this.discovery.previousPage(),
+                        onNextPage: () => void this.discovery.nextPage(),
+                        onRetry: () => void this.discovery.refresh(),
+                        onRetryCategories: () => void this.discovery.refreshCategories(),
+                        onRetryFeatured: () => void this.discovery.refreshFeatured(),
+                      })}`
+                }</wa-tab-panel
               >`
             : detailPluginId
               ? renderPluginSettingsDetail({

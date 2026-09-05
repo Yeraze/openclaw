@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // Control UI tests cover plugin catalog browsing and lifecycle mutations.
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -7,6 +8,7 @@ import type { PluginsSearchResult } from "../../../../packages/gateway-protocol/
 import { PROTOCOL_VERSION } from "../../../../packages/gateway-protocol/src/version.js";
 import type {
   PluginCatalogItem,
+  PluginDiscoveryDetailResult,
   PluginListResult,
   PluginMutationResult,
   PluginsInspectResult,
@@ -39,6 +41,7 @@ const pluginMethods = [
   "plugins.search",
   "plugins.catalog.browse",
   "plugins.catalog.categories",
+  "plugins.catalog.get",
   "plugins.install",
   "plugins.setEnabled",
   "plugins.uninstall",
@@ -276,6 +279,63 @@ const calendarInspection = {
   declared: { ...workboardInspection.declared, tools: ["calendar_create"] },
 } satisfies PluginsInspectResult;
 
+const matrixDetail = {
+  plugin: matrixDiscoveryPlugin,
+  detail: {
+    origin: "clawhub",
+    packageName: "matrix",
+    author: { handle: "openclaw", displayName: "OpenClaw" },
+    topics: ["Matrix", "Messaging"],
+    createdAt: 1_760_000_000_000,
+    updatedAt: 1_780_000_000_000,
+    readme: "# Matrix\n\nConnect OpenClaw to Matrix rooms and direct messages.",
+    compatibility: {
+      minGatewayVersion: ">=2026.5.1",
+      pluginApiRange: ">=2026.5.1",
+    },
+    configuration: [
+      {
+        name: "homeserver",
+        description: "Matrix homeserver URL",
+        required: true,
+        sensitive: false,
+      },
+      {
+        name: "accessToken",
+        description: "Matrix access token",
+        required: true,
+        sensitive: true,
+      },
+    ],
+    mcpServers: [],
+    skills: [{ name: "Matrix messaging", description: "Send and receive Matrix messages." }],
+    versions: [
+      {
+        version: "2.1.0",
+        createdAt: 1_780_000_000_000,
+        changelog: "Current release",
+        tags: ["latest"],
+      },
+      { version: "2.0.0", createdAt: 1_770_000_000_000, changelog: "Previous release", tags: [] },
+    ],
+    verification: {
+      tier: "source-linked",
+      summary: "Validated package structure and linked release source.",
+      sourceRepo: "openclaw/openclaw",
+      sourceCommit: "abc123",
+      sourcePath: "extensions/matrix",
+      scanStatus: "clean",
+    },
+    security: {
+      status: "clean",
+      verdict: "benign",
+      summary: "Capabilities match the stated purpose.",
+      guidance: "Review the access token before enabling.",
+      checkedAt: 1_780_000_000_000,
+    },
+  },
+} satisfies PluginDiscoveryDetailResult;
+
 let browser: Browser;
 let server: ControlUiE2eServer;
 
@@ -395,6 +455,9 @@ function pluginMethodResponses() {
       ],
     },
     "plugins.catalog.categories": discoveryCategories,
+    "plugins.catalog.get": {
+      cases: [{ match: { id: matrixDiscoveryPlugin.id }, response: matrixDetail }],
+    },
     "plugins.install": {
       cases: [
         {
@@ -665,6 +728,49 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await openAttentionSettings.focus();
       await page.keyboard.press("Enter");
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/attention-a");
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("opens a routed ClawHub-style plugin detail page with normalized metadata", async () => {
+    const context = await newContext();
+    const page = await context.newPage();
+    const gateway = await installMockGateway(page, {
+      featureMethods: pluginMethods,
+      methodResponses: pluginMethodResponses(),
+    });
+
+    try {
+      await page.goto(`${server.baseUrl}plugins/${matrixDiscoveryPlugin.id}`);
+      await page.getByRole("heading", { level: 1, name: "Matrix", exact: true }).waitFor();
+      expect(
+        (await gateway.getRequests("plugins.catalog.get")).map((request) => request.params),
+      ).toContainEqual({ id: matrixDiscoveryPlugin.id });
+      expect(
+        await page.getByText("Connect OpenClaw to Matrix rooms and direct messages.").count(),
+      ).toBe(1);
+      const detailTabs = page.getByRole("tablist", { name: "Plugin details" });
+      expect(await detailTabs.getByRole("tab", { name: "README" }).count()).toBe(1);
+      expect(await detailTabs.getByRole("tab", { name: "Skills" }).count()).toBe(1);
+      expect(await detailTabs.getByRole("tab", { name: "Configuration" }).count()).toBe(1);
+      expect(await detailTabs.getByRole("tab", { name: "Compatibility" }).count()).toBe(1);
+      expect(await detailTabs.getByRole("tab", { name: "Versions" }).count()).toBe(1);
+      expect(await detailTabs.getByRole("tab", { name: "Advanced" }).count()).toBe(1);
+      expect(await page.getByText("52.2k", { exact: true }).count()).toBe(1);
+      expect(await page.getByText("Capabilities match the stated purpose.").count()).toBe(1);
+      expect(
+        await page
+          .getByRole("link", { name: "openclaw/openclaw", exact: true })
+          .getAttribute("href"),
+      ).toBe("https://github.com/openclaw/openclaw");
+      expect(
+        await page.getByRole("link", { name: "@openclaw", exact: true }).getAttribute("href"),
+      ).toBe("https://clawhub.ai/user/openclaw");
+
+      await detailTabs.getByRole("tab", { name: "Versions" }).click();
+      expect(await page.getByText("2.1.0", { exact: true }).count()).toBe(1);
+      expect(await page.getByText("Current release", { exact: true }).count()).toBe(1);
     } finally {
       await context.close();
     }
