@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  decodePluginDiscoveryId,
-  joinClawHubPluginCatalog,
-  resolvePluginDiscoveryIdentity,
-} from "./catalog-discovery.js";
+import { joinClawHubPluginCatalog, resolvePluginDiscoveryIdentity } from "./catalog-discovery.js";
 
 const remote = {
   packageName: "@alice/memory-plus",
@@ -27,8 +23,11 @@ describe("plugin discovery identity and local join", () => {
 
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(id).not.toContain(remote.packageName);
-    expect(decodePluginDiscoveryId(id)).toBe(remote.packageName);
-    expect(decodePluginDiscoveryId("@alice/memory-plus")).toBeUndefined();
+    expect(resolvePluginDiscoveryIdentity(id)).toEqual({
+      origin: "clawhub",
+      identity: remote.packageName,
+    });
+    expect(resolvePluginDiscoveryIdentity("@alice/memory-plus")).toBeUndefined();
   });
 
   it("joins a package runtime alias to authoritative Gateway state", () => {

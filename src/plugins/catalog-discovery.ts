@@ -107,11 +107,6 @@ function encodeLocalPluginDiscoveryId(identity: string): string {
   return encodeDiscoveryId(LOCAL_DISCOVERY_ID_PREFIX, identity);
 }
 
-export function decodePluginDiscoveryId(id: string): string | undefined {
-  const resolved = resolvePluginDiscoveryIdentity(id);
-  return resolved?.origin === "clawhub" ? resolved.identity : undefined;
-}
-
 export function resolvePluginDiscoveryIdentity(
   id: string,
 ): { origin: "clawhub" | "local"; identity: string } | undefined {
