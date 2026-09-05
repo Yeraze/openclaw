@@ -84,27 +84,6 @@ export const localOnlyDiscoveryPlugin = {
   },
 } satisfies PluginDiscoveryEntry;
 
-export const localCalendarDisabled = {
-  id: "local-calendar",
-  name: "Local Calendar",
-  packageName: "@openclaw/local-calendar",
-  description: "Coordinate work using the included calendar plugin.",
-  version: "1.0.0",
-  kind: ["productivity"],
-  origin: "official",
-  installed: true,
-  enabled: false,
-  state: "disabled",
-  category: "tool",
-  removable: false,
-} satisfies PluginCatalogItem;
-
-export const localCalendarEnabled = {
-  ...localCalendarDisabled,
-  enabled: true,
-  state: "enabled",
-} satisfies PluginCatalogItem;
-
 function availableDiscoveryPlugin(index: number, prefix: string): PluginDiscoveryEntry {
   return {
     ...matrixDiscoveryPlugin,
