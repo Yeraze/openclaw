@@ -22536,11 +22536,14 @@ public struct PluginsCatalogGetParams: Codable, Sendable {
 
 public struct PluginsCatalogGetResult: Codable, Sendable {
     public let plugin: PluginDiscoveryEntry
+    public let detail: [String: AnyCodable]
 
     public init(
-        plugin: PluginDiscoveryEntry)
+        plugin: PluginDiscoveryEntry,
+        detail: [String: AnyCodable])
     {
         self.plugin = plugin
+        self.detail = detail
     }
 }
 
