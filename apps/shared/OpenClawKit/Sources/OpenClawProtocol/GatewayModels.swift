@@ -22147,7 +22147,7 @@ public struct PluginDiscoveryCategory: Codable, Sendable {
 public struct PluginDiscoveryCatalogFacts: Codable, Sendable {
     public let name: String
     public let summary: String?
-    public let family: AnyCodable
+    public let family: AnyCodable?
     public let author: String?
     public let official: Bool
     public let categories: [String]
@@ -22156,11 +22156,12 @@ public struct PluginDiscoveryCatalogFacts: Codable, Sendable {
     public let downloads: Double?
     public let installs: Double?
     public let verificationtier: String?
+    public let publishedtoclawhub: Bool?
 
     public init(
         name: String,
         summary: String? = nil,
-        family: AnyCodable,
+        family: AnyCodable? = nil,
         author: String? = nil,
         official: Bool,
         categories: [String],
@@ -22168,7 +22169,8 @@ public struct PluginDiscoveryCatalogFacts: Codable, Sendable {
         latestversion: String? = nil,
         downloads: Double? = nil,
         installs: Double? = nil,
-        verificationtier: String? = nil)
+        verificationtier: String? = nil,
+        publishedtoclawhub: Bool? = nil)
     {
         self.name = name
         self.summary = summary
@@ -22181,6 +22183,7 @@ public struct PluginDiscoveryCatalogFacts: Codable, Sendable {
         self.downloads = downloads
         self.installs = installs
         self.verificationtier = verificationtier
+        self.publishedtoclawhub = publishedtoclawhub
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -22195,6 +22198,7 @@ public struct PluginDiscoveryCatalogFacts: Codable, Sendable {
         case downloads
         case installs
         case verificationtier = "verificationTier"
+        case publishedtoclawhub = "publishedToClawHub"
     }
 }
 
@@ -22497,18 +22501,22 @@ public struct PluginsCatalogBrowseParams: Codable, Sendable {
 public struct PluginsCatalogBrowseResult: Codable, Sendable {
     public let items: [PluginDiscoveryEntry]
     public let nextcursor: String?
+    public let remoteerror: String?
 
     public init(
         items: [PluginDiscoveryEntry],
-        nextcursor: String? = nil)
+        nextcursor: String? = nil,
+        remoteerror: String? = nil)
     {
         self.items = items
         self.nextcursor = nextcursor
+        self.remoteerror = remoteerror
     }
 
     private enum CodingKeys: String, CodingKey {
         case items
         case nextcursor = "nextCursor"
+        case remoteerror = "remoteError"
     }
 }
 
