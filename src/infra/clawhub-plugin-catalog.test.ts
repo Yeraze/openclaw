@@ -104,7 +104,7 @@ describe("ClawHub plugin catalog client", () => {
   it("uses ClawHub's featured filter without overriding its canonical order", async () => {
     let requestedUrl = "";
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      requestedUrl = String(input);
+      requestedUrl = input instanceof Request ? input.url : String(input);
       return jsonResponse({ items: [remotePlugin] });
     });
 

@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
+import { renderHubTabs } from "../../components/hub-tabs.ts";
 import { icons } from "../../components/icons.ts";
 import { renderSettingsLoadingSkeleton, renderSettingsPage } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
@@ -299,23 +300,20 @@ function renderExplorer(props: PluginCatalogResultsProps): TemplateResult {
           </div>
         </header>
         <div class="plugin-catalog-controls">
-          <div
-            class="plugin-catalog-intents"
-            role="tablist"
-            aria-label=${t("pluginsPage.viewsLabel")}
-          >
-            ${(["all", "trending", "official"] as const).map(
-              (intent) => html`<button
-                type="button"
-                role="tab"
-                aria-selected=${props.intent === intent}
-                class="plugin-catalog-intent ${props.intent === intent ? "is-active" : ""}"
-                @click=${() => props.onIntentChange(intent)}
-              >
-                ${intentLabel(intent)}
-              </button>`,
-            )}
-          </div>
+          ${renderHubTabs({
+            id: "plugin-catalog-intents",
+            active: props.intent,
+            tabs: (["all", "trending", "official"] as const).map((intent) => ({
+              value: intent,
+              label: intentLabel(intent),
+            })),
+            ariaLabel: t("pluginsPage.viewsLabel"),
+            panelId: "plugin-catalog-results-panel",
+            className: "plugin-catalog-intents",
+            carapace: true,
+            variant: "sub",
+            onSelect: props.onIntentChange,
+          })}
           <label class="plugin-catalog-search">
             <span aria-hidden="true">${icons.search}</span>
             <input
@@ -332,7 +330,12 @@ function renderExplorer(props: PluginCatalogResultsProps): TemplateResult {
             />
           </label>
         </div>
-        <div class="plugin-catalog-layout">
+        <div
+          id="plugin-catalog-results-panel"
+          class="plugin-catalog-layout"
+          role="tabpanel"
+          aria-labelledby=${`plugin-catalog-intents-tab-${props.intent}`}
+        >
           ${renderCategorySelect(props)} ${renderCategories(props)}
           <div class="plugin-catalog-layout__results">
             ${
