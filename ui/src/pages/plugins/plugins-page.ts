@@ -569,115 +569,117 @@ class PluginsPage extends OpenClawLightDomElement {
       })}
       ${renderSettingsWorkspace(html`
         <openclaw-plugin-manager></openclaw-plugin-manager>
-        ${discovery
-          ? html`<wa-tab-panel
-              id=${PLUGINS_HUB_PANEL_ID}
-              name="plugins"
-              active
-              aria-labelledby="plugins-tab-plugins"
-              >${renderInstalledPlugins({
+        ${
+          discovery
+            ? html`<wa-tab-panel
+                id=${PLUGINS_HUB_PANEL_ID}
+                name="plugins"
+                active
+                aria-labelledby="plugins-tab-plugins"
+                >${renderInstalledPlugins({
+                  connected: this.gateway.connected,
+                  loading: this.loading,
+                  result: this.result,
+                  error: this.mcpController.pageError(this.error),
+                  expanded: this.inventoryExpanded,
+                  searchOpen: this.inventorySearchOpen,
+                  query: this.query,
+                  busy: this.busy,
+                  iconUrls: this.iconUrls,
+                  canMutate: this.canMutate(),
+                  mutationBlockedReason: blockedReason,
+                  consent: this.consentController.consent,
+                  consentInspection: this.consentController.inspection,
+                  consentInspectionLoading: this.consentController.inspectionLoading,
+                  consentInspectionError: this.consentController.inspectionError,
+                  onExpandedChange: (expanded) => {
+                    this.inventoryExpanded = expanded;
+                  },
+                  onSearchOpenChange: (open) => {
+                    this.inventorySearchOpen = open;
+                    if (!open) {
+                      this.query = "";
+                    }
+                  },
+                  onQueryChange: (query) => {
+                    this.query = query;
+                  },
+                  onRefresh: () => void this.refreshCatalog(),
+                  settingsHref: (pluginId) =>
+                    `${pathForPluginSettings(pluginId, this.context.basePath)}?from=plugins`,
+                  onOpenSettings: (pluginId) => {
+                    this.context.navigate("plugin-settings", {
+                      pathname: pluginId
+                        ? pathForPluginSettings(pluginId, this.context.basePath)
+                        : pathForRoute("plugin-settings", this.context.basePath),
+                      search: pluginId ? "?from=plugins" : "",
+                    });
+                  },
+                  onIconError: (pluginId) => this.handlePluginIconError(pluginId),
+                  onCancelConsent: () => this.consentController.close(),
+                  onConfirmConsent: () => this.consentController.confirm(),
+                  onRetryConsentInspection: () => void this.consentController.inspect(),
+                })}</wa-tab-panel
+              >`
+            : renderPlugins({
                 connected: this.gateway.connected,
                 loading: this.loading,
                 result: this.result,
                 error: this.mcpController.pageError(this.error),
-                expanded: this.inventoryExpanded,
-                searchOpen: this.inventorySearchOpen,
+                activeTab: "installed",
                 query: this.query,
+                installedFilter: this.installedFilter,
+                searchResults: null,
+                searchLoading: false,
+                searchError: null,
                 busy: this.busy,
-                iconUrls: this.iconUrls,
-                canMutate: this.canMutate(),
-                mutationBlockedReason: blockedReason,
+                messages: this.messages,
+                detailPluginId: this.detail?.pluginId ?? null,
+                detailInspection: this.detail?.inspection ?? null,
+                detailInspectionError: this.detail?.error ?? null,
                 consent: this.consentController.consent,
                 consentInspection: this.consentController.inspection,
                 consentInspectionLoading: this.consentController.inspectionLoading,
                 consentInspectionError: this.consentController.inspectionError,
-                onExpandedChange: (expanded) => {
-                  this.inventoryExpanded = expanded;
+                iconUrls: this.iconUrls,
+                canMutate: this.canMutate(),
+                mutationBlockedReason: blockedReason,
+                pageNotice: this.pageNotice,
+                ...this.mcpController.viewState,
+                onQueryChange: (query) => this.changeQuery(query),
+                onFilterChange: (filter) => {
+                  this.installedFilter = filter;
                 },
-                onSearchOpenChange: (open) => {
-                  this.inventorySearchOpen = open;
-                  if (!open) {
-                    this.query = "";
+                onRefresh: () => void this.mcpController.refreshPage(() => this.refreshCatalog()),
+                onIconError: (pluginId) => this.handlePluginIconError(pluginId),
+                onShowDetails: (pluginId) => {
+                  const routeOwnsDetail = Boolean(
+                    pluginSettingsIdFromPath(
+                      this.routeData?.location.pathname ?? "",
+                      this.context.basePath,
+                    ),
+                  );
+                  if (pluginId || !routeOwnsDetail) {
+                    void this.showDetails(pluginId);
+                    return;
                   }
-                },
-                onQueryChange: (query) => {
-                  this.query = query;
-                },
-                onRefresh: () => void this.refreshCatalog(),
-                settingsHref: (pluginId) =>
-                  `${pathForPluginSettings(pluginId, this.context.basePath)}?from=plugins`,
-                onOpenSettings: (pluginId) => {
-                  this.context.navigate("plugin-settings", {
-                    pathname: pluginId
-                      ? pathForPluginSettings(pluginId, this.context.basePath)
-                      : pathForRoute("plugin-settings", this.context.basePath),
-                    search: pluginId ? "?from=plugins" : "",
+                  this.detail = null;
+                  this.context.replace("plugin-settings", {
+                    pathname: pathForRoute("plugin-settings", this.context.basePath),
                   });
                 },
-                onIconError: (pluginId) => this.handlePluginIconError(pluginId),
+                onSetEnabled: (pluginId, enabled, rowKey) =>
+                  void this.updateEnabled(pluginId, enabled, rowKey),
+                onInstall: (request, installIdentity) =>
+                  void this.consentController.install(request, installIdentity),
                 onCancelConsent: () => this.consentController.close(),
                 onConfirmConsent: () => this.consentController.confirm(),
                 onRetryConsentInspection: () => void this.consentController.inspect(),
-              })}</wa-tab-panel
-            >`
-          : renderPlugins({
-              connected: this.gateway.connected,
-              loading: this.loading,
-              result: this.result,
-              error: this.mcpController.pageError(this.error),
-              activeTab: "installed",
-              query: this.query,
-              installedFilter: this.installedFilter,
-              searchResults: null,
-              searchLoading: false,
-              searchError: null,
-              busy: this.busy,
-              messages: this.messages,
-              detailPluginId: this.detail?.pluginId ?? null,
-              detailInspection: this.detail?.inspection ?? null,
-              detailInspectionError: this.detail?.error ?? null,
-              consent: this.consentController.consent,
-              consentInspection: this.consentController.inspection,
-              consentInspectionLoading: this.consentController.inspectionLoading,
-              consentInspectionError: this.consentController.inspectionError,
-              iconUrls: this.iconUrls,
-              canMutate: this.canMutate(),
-              mutationBlockedReason: blockedReason,
-              pageNotice: this.pageNotice,
-              ...this.mcpController.viewState,
-              onQueryChange: (query) => this.changeQuery(query),
-              onFilterChange: (filter) => {
-                this.installedFilter = filter;
-              },
-              onRefresh: () => void this.mcpController.refreshPage(() => this.refreshCatalog()),
-              onIconError: (pluginId) => this.handlePluginIconError(pluginId),
-              onShowDetails: (pluginId) => {
-                const routeOwnsDetail = Boolean(
-                  pluginSettingsIdFromPath(
-                    this.routeData?.location.pathname ?? "",
-                    this.context.basePath,
-                  ),
-                );
-                if (pluginId || !routeOwnsDetail) {
-                  void this.showDetails(pluginId);
-                  return;
-                }
-                this.detail = null;
-                this.context.replace("plugin-settings", {
-                  pathname: pathForRoute("plugin-settings", this.context.basePath),
-                });
-              },
-              onSetEnabled: (pluginId, enabled, rowKey) =>
-                void this.updateEnabled(pluginId, enabled, rowKey),
-              onInstall: (request, installIdentity) =>
-                void this.consentController.install(request, installIdentity),
-              onCancelConsent: () => this.consentController.close(),
-              onConfirmConsent: () => this.consentController.confirm(),
-              onRetryConsentInspection: () => void this.consentController.inspect(),
-              onDismissMessage: (rowKey) => this.setMessage(rowKey, null),
-              onUninstall: (pluginId, rowKey) => void this.uninstall(pluginId, rowKey),
-              onSearchClawHub: () => this.context.navigate("plugins"),
-            })}
+                onDismissMessage: (rowKey) => this.setMessage(rowKey, null),
+                onUninstall: (pluginId, rowKey) => void this.uninstall(pluginId, rowKey),
+                onSearchClawHub: () => this.context.navigate("plugins"),
+              })
+        }
       `)}
     `;
   }

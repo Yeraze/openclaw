@@ -124,9 +124,9 @@ export function renderSelfLearningPitch(
       <p>${t("skillWorkshop.selfLearning.pitchBody")}</p>
       <button
         type="button"
-        class="sw-btn sw-btn--primary oc-action oc-action-primary ${selfLearning.busy
-          ? "is-busy"
-          : ""}"
+        class="sw-btn sw-btn--primary oc-action oc-action-primary ${
+          selfLearning.busy ? "is-busy" : ""
+        }"
         ?disabled=${selfLearning.busy || !selfLearning.canUpdate}
         @click=${() => onToggle(true)}
       >

@@ -39,15 +39,17 @@ export function renderPluginsHubHeader(props: PluginsHubHeaderProps): TemplateRe
         ${renderPluginsHubTabs({ active: props.active, onSelect: props.onSelect })}
       </div>
       <div class="hub-page-header__actions">
-        ${props.secondaryAction
-          ? html`<button
-              type="button"
-              class="btn btn--sm plugins-hub-header__secondary oc-action oc-action-secondary"
-              @click=${props.secondaryAction.onClick}
-            >
-              ${props.secondaryAction.label}
-            </button>`
-          : nothing}
+        ${
+          props.secondaryAction
+            ? html`<button
+                type="button"
+                class="btn btn--sm plugins-hub-header__secondary oc-action oc-action-secondary"
+                @click=${props.secondaryAction.onClick}
+              >
+                ${props.secondaryAction.label}
+              </button>`
+            : nothing
+        }
       </div>
     </section>
   `;

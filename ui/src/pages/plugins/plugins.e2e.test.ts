@@ -463,7 +463,12 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         .toBeLessThanOrEqual(1);
       await page.setViewportSize(desktopViewport);
       await page.evaluate(
-        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+        () =>
+          new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(resolve);
+            });
+          }),
       );
       await captureScreenshot(page, "12-installed-plugins-desktop.png");
 
@@ -526,6 +531,23 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await closeSearch.click();
       expect(await search.count()).toBe(0);
       expect(await cards.count()).toBe(12);
+      await expect
+        .poll(() =>
+          page
+            .getByRole("button", { name: "Search plugins", exact: true })
+            .evaluate((element) => element === document.activeElement),
+        )
+        .toBe(true);
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            requestAnimationFrame(resolve);
+          }),
+      );
+      const settingsAfterSearch = await settingsButton.boundingBox();
+      expect(Math.abs((settingsAfterSearch?.x ?? 0) - (settingsBeforeSearch?.x ?? 0))).toBeLessThan(
+        1,
+      );
 
       const showAll = page.getByRole("button", { name: "Show all 16", exact: true });
       const restingMoreAppearance = await showAll.evaluate((element) => {
