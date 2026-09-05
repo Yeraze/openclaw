@@ -27,6 +27,7 @@ type PluginDiscoveryGateway = {
   isConnected: () => boolean;
   capture: () => GatewayConnectionScope | null;
   isCurrent: (scope: GatewayConnectionScope) => boolean;
+  onEntriesChanged?: () => void;
 };
 
 export class PluginDiscoveryController {
@@ -79,6 +80,7 @@ export class PluginDiscoveryController {
         this.result = { items: page.items };
         this.remoteError = page.remoteError ?? null;
         this.rememberEntries(page.observed);
+        this.gateway.onEntriesChanged?.();
       },
       onError: (error) => {
         this.error = formatUiError(error);
@@ -116,6 +118,7 @@ export class PluginDiscoveryController {
       onComplete: (result) => {
         this.featured = result.items.filter((plugin) => !plugin.local.enabled).slice(0, 9);
         this.rememberEntries(result.items);
+        this.gateway.onEntriesChanged?.();
       },
       onError: (error) => {
         this.featuredError = formatUiError(error);
@@ -181,7 +184,7 @@ export class PluginDiscoveryController {
     const observed: PluginDiscoveryEntry[] = [];
     let cursor = params.cursor;
     let remoteError: string | undefined;
-    let shouldFetch = true;
+    let shouldFetch = params.overflow === undefined || Boolean(cursor);
 
     while (available.length < CATALOG_PAGE_SIZE && shouldFetch) {
       const page = await params.client.request<PluginDiscoveryResult>(
@@ -197,7 +200,7 @@ export class PluginDiscoveryController {
       );
       observed.push(...page.items);
       remoteError = page.remoteError;
-      available.push(...page.items.filter((plugin) => !plugin.local.installed));
+      available.push(...page.items);
       cursor = page.nextCursor;
       shouldFetch = !params.query && Boolean(cursor);
     }
@@ -297,6 +300,9 @@ export class PluginDiscoveryController {
 
   updateQuery(query: string): void {
     this.query = query;
+    if (query.trim()) {
+      this.intent = "all";
+    }
     this.host.requestUpdate();
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
@@ -343,6 +349,7 @@ export class PluginDiscoveryController {
     }
     this.pageIndex = targetIndex;
     this.result = { items };
+    this.gateway.onEntriesChanged?.();
     this.host.requestUpdate();
   }
 
@@ -377,6 +384,7 @@ export class PluginDiscoveryController {
       this.pageIndex = targetIndex;
       this.pages.push(page.items);
       this.result = { items: page.items };
+      this.gateway.onEntriesChanged?.();
     } catch (error) {
       if (this.gateway.isCurrent(scope) && requestEpoch === this.pageRequestEpoch) {
         this.error = formatUiError(error);
