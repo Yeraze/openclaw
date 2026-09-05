@@ -25,6 +25,8 @@ import {
   initialInventory,
   installResult,
   installedPluginsInventory,
+  localCalendarDisabled,
+  localCalendarEnabled,
   localOnlyDetail,
   localOnlyDiscoveryPlugin,
   lobsterInspection,
