@@ -159,7 +159,6 @@ a.installed-plugins-card,
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   color: inherit;
-  cursor: pointer;
   text-decoration: none;
   transition:
     border-color var(--duration-fast) ease,
