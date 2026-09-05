@@ -44,28 +44,28 @@ export type ClawHubPluginDetail = ClawHubPluginCatalogEntry & {
   security?: ClawHubPluginSecurity;
 };
 
-export type ClawHubPluginCompatibility = {
+type ClawHubPluginCompatibility = {
   pluginApiRange?: string;
   builtWithOpenClawVersion?: string;
   pluginSdkVersion?: string;
   minGatewayVersion?: string;
 };
 
-export type ClawHubPluginConfigField = {
+type ClawHubPluginConfigField = {
   name: string;
   description?: string;
   required: boolean;
   sensitive: boolean;
 };
 
-export type ClawHubPluginVersion = {
+type ClawHubPluginVersion = {
   version: string;
   createdAt: number;
   changelog: string;
   tags: string[];
 };
 
-export type ClawHubPluginVerification = {
+type ClawHubPluginVerification = {
   tier: string;
   summary?: string;
   sourceRepo?: string;
@@ -74,7 +74,7 @@ export type ClawHubPluginVerification = {
   scanStatus?: string;
 };
 
-export type ClawHubPluginSecurity = {
+type ClawHubPluginSecurity = {
   status: string;
   verdict?: string;
   summary?: string;
