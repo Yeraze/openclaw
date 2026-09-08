@@ -1784,7 +1784,7 @@ class MainViewModel private constructor(
     sources.forEach { source -> chatShareDraftQueue.migrateOwner(from = source, to = to) }
   }
 
-  /** The ViewModel owns image decoding so Activity recreation cannot cancel an accepted picker result. */
+  /** The ViewModel owns attachment loading so Activity recreation cannot cancel an accepted picker result. */
   internal fun importChatComposerAttachments(
     owner: ChatComposerOwner,
     mediaAuthorizationId: String,

@@ -464,7 +464,8 @@ internal fun ChatScreen(
       }
     }
   val shareStaging =
-    chatShareDraft?.let { viewModel.chatShareDraftTargetsOwner(it.id, composerOwner, mainSessionKey) } == true
+    composerState.hasPendingImport(composerOwner) ||
+      chatShareDraft?.let { viewModel.chatShareDraftTargetsOwner(it.id, composerOwner, mainSessionKey) } == true
   val pendingSendAdmissionIds = sendStates[composerOwner]?.pendingAdmissionIds.orEmpty()
   val currentPickerOwner by rememberUpdatedState(composerOwner)
   val currentPickerMainSessionKey by rememberUpdatedState(mainSessionKey)
@@ -2647,7 +2648,7 @@ private fun ChatComposer(
           modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onDismissShareImportNotice, modifier = Modifier.size(32.dp)) {
-          Icon(Icons.Default.Close, contentDescription = nativeString("Dismiss shared-image warning"))
+          Icon(Icons.Default.Close, contentDescription = nativeString("Dismiss attachment warning"))
         }
       }
     }
