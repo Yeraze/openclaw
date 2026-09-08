@@ -193,6 +193,20 @@ describe("renderInstalledPlugins", () => {
     );
   });
 
+  it.each([
+    ["offline", { connected: false }, "Connect to browse installed and recommended plugins."],
+    ["empty", { result: createResult([]) }, "No optional plugins installed"],
+  ])("renders the %s state as plain catalog copy", (_name, overrides, message) => {
+    const container = mount(baseProps(overrides));
+
+    const empty = expectDefined(
+      container.querySelector<HTMLElement>(".plugin-catalog-results__empty"),
+      "installed plugins empty state",
+    );
+    expect(empty.textContent?.trim()).toBe(message);
+    expect(container.querySelector(".settings-empty")).toBeNull();
+  });
+
   it("routes cards and the gear to settings without inline mutation controls or icon tooltips", () => {
     const onOpenSettings = vi.fn();
     const container = mount(

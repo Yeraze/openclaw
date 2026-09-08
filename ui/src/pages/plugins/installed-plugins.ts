@@ -2,10 +2,7 @@ import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
 import { icons } from "../../components/icons.ts";
-import {
-  renderSettingsEmpty,
-  renderSettingsLoadingSkeleton,
-} from "../../components/settings-ui.ts";
+import { renderSettingsLoadingSkeleton } from "../../components/settings-ui.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiExternalText } from "../../lib/format-error.ts";
 import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
@@ -225,14 +222,15 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
                 </button>
               </div>`
             : !props.connected
-              ? renderSettingsEmpty(t("pluginsPage.offlineBody"), { carapace: true })
+              ? html`<p class="plugin-catalog-results__empty">${t("pluginsPage.offlineBody")}</p>`
               : visible.length === 0
-                ? renderSettingsEmpty(
-                    props.query
-                      ? t("pluginsPage.noInstalledMatchTitle")
-                      : t("pluginsPage.noInstalledTitle"),
-                    { carapace: true },
-                  )
+                ? html`<p class="plugin-catalog-results__empty">
+                    ${
+                      props.query
+                        ? t("pluginsPage.noInstalledMatchTitle")
+                        : t("pluginsPage.noInstalledTitle")
+                    }
+                  </p>`
                 : html`<div class="installed-plugins__grid">
                     ${repeat(
                       visible,
