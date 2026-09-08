@@ -3,6 +3,7 @@ import {
   fetchAllOfficialClawHubPlugins,
   fetchClawHubPluginCatalog,
   fetchClawHubPluginCategories,
+  fetchClawHubPluginVersionCategories,
   fetchClawHubPluginDetail,
 } from "./clawhub-plugin-catalog.js";
 
@@ -251,6 +252,41 @@ describe("ClawHub plugin catalog client", () => {
         icon: "package",
         order: 0,
       },
+    ]);
+  });
+
+  it("batch-reads categories for exact package versions", async () => {
+    let request: Request | undefined;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      request = new Request(input, init);
+      return jsonResponse({
+        packages: [
+          { name: "@openclaw/memory", version: "1.2.3", categories: ["memory", "tools"] },
+          { name: "@openclaw/missing", version: "4.5.6", categories: null },
+        ],
+      });
+    });
+
+    const result = await fetchClawHubPluginVersionCategories({
+      baseUrl: "https://example.com",
+      packages: [
+        { name: "@openclaw/memory", version: "1.2.3" },
+        { name: "@openclaw/missing", version: "4.5.6" },
+      ],
+      fetchImpl,
+    });
+
+    expect(request?.method).toBe("POST");
+    expect(new URL(request?.url ?? "").pathname).toBe("/api/v1/packages/categories:batch");
+    await expect(request?.json()).resolves.toEqual({
+      packages: [
+        { name: "@openclaw/memory", version: "1.2.3" },
+        { name: "@openclaw/missing", version: "4.5.6" },
+      ],
+    });
+    expect(result).toEqual([
+      { name: "@openclaw/memory", version: "1.2.3", categories: ["memory", "tools"] },
+      { name: "@openclaw/missing", version: "4.5.6", categories: null },
     ]);
   });
 

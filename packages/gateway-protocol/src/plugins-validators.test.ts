@@ -104,6 +104,32 @@ describe("plugin lifecycle protocol validators", () => {
     ).toBe(false);
   });
 
+  it("accepts ordered plugin categories while retaining the primary compatibility field", () => {
+    const result = {
+      plugins: [
+        {
+          id: "memory-tools",
+          name: "Memory Tools",
+          installed: true,
+          enabled: true,
+          state: "enabled",
+          categories: ["memory", "tools"],
+          category: "memory",
+        },
+      ],
+      diagnostics: [],
+      mutationAllowed: true,
+    };
+
+    expect(Value.Check(PluginsListResultSchema, result)).toBe(true);
+    expect(
+      Value.Check(PluginsListResultSchema, {
+        ...result,
+        plugins: [{ ...result.plugins[0], categories: ["memory", ""] }],
+      }),
+    ).toBe(false);
+  });
+
   it("requires exactly one non-empty plugin id for inspection", () => {
     expect(validatePluginsInspectParams({ pluginId: "workboard" })).toBe(true);
     expect(validatePluginsInspectParams({ pluginId: "" })).toBe(false);
