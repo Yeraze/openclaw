@@ -51,12 +51,17 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       expect(await marketplaceRow.textContent()).toContain("52.2k");
       expect(await marketplaceRow.textContent()).not.toContain("downloads");
       const cards = page.locator(".installed-plugins-card");
-      expect(await cards.count()).toBe(9);
+      const visibleCards = page.locator(".installed-plugins-card:visible");
+      expect(await cards.count()).toBe(13);
       expect(
         await cards.evaluateAll((elements) =>
           elements.slice(0, 5).map((card) => card.dataset.pluginId),
         ),
-      ).toEqual(["attention-a", "attention-b", "needs-setup", "enabled-a", "enabled-b"]);
+      ).toEqual(["attention-a", "attention-b", "disabled-01", "needs-setup", "disabled-03"]);
+      expect(
+        await installedSection.locator(".installed-plugins__group-header h3").allTextContents(),
+      ).toEqual(["Channels", "Models", "Memory", "Context", "Web", "Voice", "Uncategorized"]);
+      expect(await visibleCards.count()).toBe(13);
       expect(
         await installedSection.getByRole("searchbox", { name: "Search plugins" }).count(),
       ).toBe(0);
@@ -86,14 +91,16 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
           .evaluate((element) => getComputedStyle(element).color),
       ).toBe(titleColor);
       expect(await firstCard.locator("wa-switch").count()).toBe(0);
-      const grid = page.locator(".installed-plugins__grid");
+      const grid = page.locator(".installed-plugins__grid").first();
       const columnCount = () =>
         grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
       await expect.poll(columnCount).toBe(3);
       await page.setViewportSize({ height: 900, width: 768 });
       await expect.poll(columnCount).toBe(2);
+      await expect.poll(() => visibleCards.count()).toBe(10);
       await page.setViewportSize({ height: 852, width: 393 });
       await expect.poll(columnCount).toBe(1);
+      await expect.poll(() => visibleCards.count()).toBe(7);
       await expect
         .poll(() =>
           page.evaluate(
@@ -170,7 +177,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       );
       await closeSearch.click();
       expect(await search.count()).toBe(0);
-      expect(await cards.count()).toBe(9);
+      expect(await cards.count()).toBe(13);
       await expect
         .poll(() =>
           page
@@ -189,7 +196,8 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         1,
       );
 
-      const showAll = page.getByRole("button", { name: "Show all 16", exact: true });
+      const showAll = page.getByRole("button", { name: "View all", exact: true }).first();
+      expect(await page.getByRole("button", { name: "View all", exact: true }).count()).toBe(7);
       const restingMoreAppearance = await showAll.evaluate((element) => {
         const style = getComputedStyle(element);
         return {
@@ -207,16 +215,15 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         return {
           backgroundColor: style.backgroundColor,
           borderColor: style.borderColor,
-          filter: style.filter,
         };
       });
       expect(hoverMoreAppearance).toMatchObject({
         backgroundColor: "rgba(0, 0, 0, 0)",
         borderColor: "rgba(0, 0, 0, 0)",
       });
-      expect(hoverMoreAppearance.filter).toBe("brightness(1.35)");
       await showAll.click();
       expect(await cards.count()).toBe(16);
+      expect(await visibleCards.count()).toBe(16);
       const setupCard = page.locator('[data-plugin-id="needs-setup"]');
       const setupNotice = setupCard.getByRole("img", {
         name: "Additional configuration required before this plugin can be enabled.",
@@ -237,8 +244,8 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
           .count(),
       ).toBe(1);
       expect(await setupCard.textContent()).not.toContain("Setup required");
-      await page.getByRole("button", { name: "Hide", exact: true }).click();
-      expect(await cards.count()).toBe(9);
+      await page.getByRole("button", { name: "Hide", exact: true }).first().click();
+      expect(await cards.count()).toBe(13);
 
       expect(await gateway.getRequests("plugins.setEnabled")).toEqual([]);
       expect(await gateway.getRequests("plugins.search")).toEqual([]);
@@ -247,7 +254,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await page.getByRole("button", { name: "Plugin settings", exact: true }).click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins");
       await page.goto(`${server.baseUrl}plugins`);
-      await page.getByRole("button", { name: "Show all 16", exact: true }).click();
+      await page.getByRole("button", { name: "View all", exact: true }).first().click();
       await page.locator('[data-plugin-id="workboard"]').click();
       await expect.poll(() => new URL(page.url()).pathname).toBe("/settings/plugins/workboard");
       expect(new URL(page.url()).search).toBe("?from=plugins");

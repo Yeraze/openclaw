@@ -128,10 +128,12 @@ const telegramPlugin = {
   removable: false,
 } satisfies PluginCatalogItem;
 
+type InstalledInventoryPlugin = PluginCatalogItem & { categories: string[] };
+
 function installedInventoryPlugin(
   id: string,
-  overrides: Partial<PluginCatalogItem> = {},
-): PluginCatalogItem {
+  overrides: Partial<InstalledInventoryPlugin> = {},
+): InstalledInventoryPlugin {
   return {
     id,
     name: id
@@ -144,7 +146,7 @@ function installedInventoryPlugin(
     installed: true,
     enabled: false,
     state: "disabled",
-    category: "tool",
+    categories: [],
     removable: false,
     ...overrides,
   };
@@ -155,9 +157,19 @@ const installedPluginsItems = [
     state: "error",
     error: "Manifest B failed",
     order: 20,
+    categories: ["channels"],
   }),
-  installedInventoryPlugin("enabled-b", { enabled: true, state: "enabled", order: 20 }),
-  installedInventoryPlugin("needs-setup", { state: "needs-setup", order: 5 }),
+  installedInventoryPlugin("enabled-b", {
+    enabled: true,
+    state: "enabled",
+    order: 20,
+    categories: ["memory"],
+  }),
+  installedInventoryPlugin("needs-setup", {
+    state: "needs-setup",
+    order: 5,
+    categories: ["models"],
+  }),
   ...Array.from({ length: 11 }, (_, index) =>
     installedInventoryPlugin(
       index === 0 ? "workboard" : `disabled-${String(index).padStart(2, "0")}`,
@@ -169,6 +181,19 @@ const installedPluginsItems = [
             }
           : {}),
         order: index,
+        categories: [
+          ["context"],
+          ["channels"],
+          ["channels"],
+          ["models"],
+          ["models"],
+          ["models"],
+          ["memory"],
+          ["memory"],
+          ["web"],
+          ["voice"],
+          [],
+        ][index],
       },
     ),
   ),
@@ -176,9 +201,14 @@ const installedPluginsItems = [
     state: "error",
     error: "Manifest A failed",
     order: 10,
-    category: "internal-category",
+    categories: ["channels", "web"],
   }),
-  installedInventoryPlugin("enabled-a", { enabled: true, state: "enabled", order: 10 }),
+  installedInventoryPlugin("enabled-a", {
+    enabled: true,
+    state: "enabled",
+    order: 10,
+    categories: ["memory"],
+  }),
 ];
 
 const installedPluginsInventory = inventory(installedPluginsItems);

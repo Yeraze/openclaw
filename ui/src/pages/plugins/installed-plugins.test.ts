@@ -54,6 +54,118 @@ describe("renderInstalledPlugins", () => {
     vi.restoreAllMocks();
   });
 
+  it("groups each plugin once by its primary category in product order", () => {
+    const plugins = [
+      createPlugin({ id: "voice", name: "Voice" }),
+      createPlugin({ id: "web", name: "Web" }),
+      createPlugin({ id: "channel", name: "Channel" }),
+      createPlugin({ id: "model", name: "Model" }),
+      createPlugin({ id: "memory", name: "Memory" }),
+      createPlugin({ id: "context", name: "Context" }),
+      createPlugin({ id: "uncategorized", name: "Uncategorized" }),
+    ] as Array<ReturnType<typeof createPlugin> & { categories?: string[] }>;
+    plugins[0].categories = ["voice"];
+    plugins[1].categories = ["web", "channels"];
+    plugins[2].categories = ["channels", "web"];
+    plugins[3].categories = ["models"];
+    plugins[4].categories = ["memory"];
+    plugins[5].categories = ["context"];
+
+    const container = mount(baseProps({ result: createResult(plugins) }));
+    const groups = [...container.querySelectorAll<HTMLElement>("[data-plugin-category]")];
+
+    expect(groups.map((group) => group.dataset.pluginCategory)).toEqual([
+      "channels",
+      "models",
+      "memory",
+      "context",
+      "web",
+      "voice",
+      "uncategorized",
+    ]);
+    expect(groups.map((group) => group.querySelector("h3")?.textContent?.trim())).toEqual([
+      "Channels",
+      "Models",
+      "Memory",
+      "Context",
+      "Web",
+      "Voice",
+      "Uncategorized",
+    ]);
+    expect(visiblePluginIds(container)).toHaveLength(7);
+    expect(
+      groups
+        .find((group) => group.dataset.pluginCategory === "channels")
+        ?.querySelector('[data-plugin-id="channel"]'),
+    ).not.toBeNull();
+    expect(
+      groups
+        .find((group) => group.dataset.pluginCategory === "web")
+        ?.querySelector('[data-plugin-id="channel"]'),
+    ).toBeNull();
+  });
+
+  it("matches installed plugins by secondary category", () => {
+    const channel = createPlugin({ id: "channel", name: "Channel" }) as ReturnType<
+      typeof createPlugin
+    > & { categories: string[] };
+    channel.categories = ["channels", "web"];
+    const model = createPlugin({ id: "model", name: "Model" }) as ReturnType<
+      typeof createPlugin
+    > & { categories: string[] };
+    model.categories = ["models"];
+
+    const container = mount(
+      baseProps({
+        result: createResult([channel, model]),
+        searchOpen: true,
+        query: "web",
+      }),
+    );
+
+    expect(visiblePluginIds(container)).toEqual(["channel"]);
+  });
+
+  it("expands every category when any category View all action is activated", () => {
+    const plugins = ["channels", "models"].flatMap((category) =>
+      Array.from({ length: 4 }, (_, index) => {
+        const plugin = createPlugin({
+          id: `${category}-${index}`,
+          name: `${category} ${index}`,
+        }) as ReturnType<typeof createPlugin> & { categories: string[] };
+        plugin.categories = [category];
+        return plugin;
+      }),
+    );
+    let props = baseProps({ result: createResult(plugins) });
+    const container = mount(props);
+    const rerender = () => render(renderInstalledPlugins(props), container);
+    props = {
+      ...props,
+      onExpandedChange: (expanded) => {
+        props = { ...props, expanded };
+        rerender();
+      },
+    };
+    rerender();
+
+    expect(visiblePluginIds(container)).toHaveLength(6);
+    const viewAll = [...container.querySelectorAll<HTMLButtonElement>("button")].filter(
+      (button) => button.textContent?.trim() === "View all",
+    );
+    expect(viewAll).toHaveLength(2);
+
+    viewAll[1]?.click();
+
+    expect(visiblePluginIds(container)).toHaveLength(8);
+    expect(container.querySelectorAll("[data-plugin-category]")).toHaveLength(2);
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>("button")].filter(
+        (button) => button.textContent?.trim() === "Hide",
+      ),
+    ).toHaveLength(2);
+  });
+
   it("retries a failed catalog load without leaving the workspace", () => {
     const onRefresh = vi.fn();
     const container = mount(baseProps({ error: "Catalog unavailable", onRefresh }));
@@ -121,14 +233,8 @@ describe("renderInstalledPlugins", () => {
     };
     rerender();
 
-    expect(visiblePluginIds(container)).toHaveLength(9);
-    expect(visiblePluginIds(container).slice(0, 5)).toEqual([
-      "attention-a",
-      "attention-b",
-      "needs-setup",
-      "enabled-a",
-      "enabled-b",
-    ]);
+    expect(visiblePluginIds(container)).toHaveLength(3);
+    expect(visiblePluginIds(container)).toEqual(["attention-a", "attention-b", "needs-setup"]);
     expect(container.querySelector('input[type="search"]')).toBeNull();
     expect(container.textContent).not.toContain("Not Installed");
 
@@ -157,12 +263,12 @@ describe("renderInstalledPlugins", () => {
     );
     closeSearch.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
-    expect(visiblePluginIds(container)).toHaveLength(9);
+    expect(visiblePluginIds(container)).toHaveLength(3);
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Search plugins");
 
     const showAll = expectDefined(
-      [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-        button.textContent?.includes("Show all 16"),
+      [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+        (button) => button.textContent?.trim() === "View all",
       ),
       "show all button",
     );
@@ -178,7 +284,7 @@ describe("renderInstalledPlugins", () => {
     );
     hide.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
-    expect(visiblePluginIds(container)).toHaveLength(9);
+    expect(visiblePluginIds(container)).toHaveLength(3);
   });
 
   it("uses Carapace cards without repeating an inventory subtitle", () => {

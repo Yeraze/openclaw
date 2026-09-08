@@ -149,6 +149,44 @@
   gap: var(--space-3);
 }
 
+.installed-plugins__groups,
+.installed-plugins__group {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.installed-plugins__groups {
+  gap: var(--space-5);
+}
+
+.installed-plugins__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.installed-plugins__group-header h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--control-ui-text-md);
+}
+
+.settings-page.oc-app-surface .btn.installed-plugins__group-action {
+  min-height: 0;
+  padding: var(--space-1) 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--control-ui-text-sm);
+}
+
+.settings-page.oc-app-surface .btn.installed-plugins__group-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-strong);
+}
+
 a.installed-plugins-card,
 .plugin-featured-card {
   min-width: 0;
@@ -316,35 +354,23 @@ a.installed-plugins-card .installed-plugins-card__art > img.plugins-icon {
   line-height: 1.4;
 }
 
-.installed-plugins__more {
-  display: flex;
-  justify-content: center;
-}
-
-.settings-page.oc-app-surface .btn.installed-plugins__more-action {
-  min-height: 0;
-  padding: var(--space-1) var(--space-2);
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--control-ui-text-sm);
-}
-
-.settings-page.oc-app-surface .btn.installed-plugins__more-action:hover:not(:disabled) {
-  border-color: transparent;
-  background: transparent;
-  filter: brightness(1.35);
-}
-
 @media (max-width: 900px) {
   .installed-plugins__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .installed-plugins__group:not(.is-expanded) .installed-plugins-card:nth-child(n + 3) {
+    display: none;
   }
 }
 
 @media (max-width: 640px) {
   .installed-plugins__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .installed-plugins__group:not(.is-expanded) .installed-plugins-card:nth-child(n + 2) {
+    display: none;
   }
 }
 

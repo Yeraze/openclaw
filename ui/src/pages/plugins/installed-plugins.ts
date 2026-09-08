@@ -9,7 +9,86 @@ import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import type { PluginCatalogItem, PluginListResult } from "../../lib/plugins/index.ts";
 import { renderArtTile } from "./consent-dialog.ts";
 import { renderPluginCardIdentity, type PluginCardAttribution } from "./plugin-card.ts";
-const INSTALLED_PLUGINS_INITIAL_LIMIT = 9;
+const INSTALLED_PLUGINS_ROW_LIMIT = 3;
+const UNCATEGORIZED = "uncategorized";
+const INSTALLED_CATEGORY_ORDER = [
+  "channels",
+  "models",
+  "memory",
+  "context",
+  "web",
+  "voice",
+  "media",
+  "tools",
+  "runtime",
+  "gateway",
+  "security",
+  "other",
+] as const;
+
+type InstalledPluginItem = PluginCatalogItem & { categories?: readonly string[] };
+type InstalledPluginGroup = {
+  category: string;
+  plugins: InstalledPluginItem[];
+};
+
+const INSTALLED_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  channels: "pluginsPage.categoryChannels",
+  models: "pluginsPage.categoryModels",
+  memory: "pluginsPage.categoryMemory",
+  context: "pluginsPage.categoryContext",
+  web: "pluginsPage.categoryWeb",
+  voice: "pluginsPage.categoryVoice",
+  media: "pluginsPage.categoryMedia",
+  tools: "pluginsPage.categoryTools",
+  runtime: "pluginsPage.categoryRuntime",
+  gateway: "pluginsPage.categoryGateway",
+  security: "pluginsPage.categorySecurity",
+  other: "pluginsPage.categoryOther",
+  uncategorized: "pluginsPage.categoryUncategorized",
+};
+
+function installedCategoryLabel(category: string): string {
+  const key = INSTALLED_CATEGORY_LABELS[category];
+  if (key) {
+    return t(key);
+  }
+  return category
+    .split("-")
+    .map((part) => `${part.slice(0, 1).toLocaleUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function compareInstalledCategories(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+  if (left === UNCATEGORIZED) {
+    return 1;
+  }
+  if (right === UNCATEGORIZED) {
+    return -1;
+  }
+  const leftIndex = INSTALLED_CATEGORY_ORDER.findIndex((category) => category === left);
+  const rightIndex = INSTALLED_CATEGORY_ORDER.findIndex((category) => category === right);
+  if (leftIndex === -1 || rightIndex === -1) {
+    return leftIndex === rightIndex ? left.localeCompare(right) : leftIndex === -1 ? 1 : -1;
+  }
+  return leftIndex - rightIndex;
+}
+
+function groupInstalledPlugins(plugins: readonly InstalledPluginItem[]): InstalledPluginGroup[] {
+  const groups = new Map<string, InstalledPluginItem[]>();
+  for (const plugin of plugins) {
+    const category = plugin.categories?.[0] ?? UNCATEGORIZED;
+    const group = groups.get(category) ?? [];
+    group.push(plugin);
+    groups.set(category, group);
+  }
+  return [...groups.entries()]
+    .toSorted(([left], [right]) => compareInstalledCategories(left, right))
+    .map(([category, groupedPlugins]) => ({ category, plugins: groupedPlugins }));
+}
 
 function installedPluginPriority(plugin: PluginCatalogItem): number {
   if (plugin.state === "error" || plugin.state === "needs-setup") {
@@ -19,7 +98,9 @@ function installedPluginPriority(plugin: PluginCatalogItem): number {
 }
 
 /** Actionable plugins lead the collapsed inventory, followed by enabled and disabled groups. */
-function prioritizeInstalledPlugins(plugins: readonly PluginCatalogItem[]): PluginCatalogItem[] {
+function prioritizeInstalledPlugins(
+  plugins: readonly InstalledPluginItem[],
+): InstalledPluginItem[] {
   return plugins
     .filter((plugin) => plugin.installed)
     .toSorted(
@@ -30,7 +111,7 @@ function prioritizeInstalledPlugins(plugins: readonly PluginCatalogItem[]): Plug
     );
 }
 
-function matchesPlugin(plugin: PluginCatalogItem, query: string): boolean {
+function matchesPlugin(plugin: InstalledPluginItem, query: string): boolean {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) {
     return true;
@@ -39,7 +120,7 @@ function matchesPlugin(plugin: PluginCatalogItem, query: string): boolean {
     plugin.name,
     plugin.id,
     plugin.description,
-    plugin.category,
+    ...(plugin.categories ?? []),
     plugin.origin,
     ...(plugin.kind ?? []),
   ].some((value) => value?.toLocaleLowerCase().includes(needle));
@@ -64,7 +145,7 @@ export type InstalledPluginsProps = {
   onIconError: (pluginId: string) => void;
 };
 
-function renderCard(plugin: PluginCatalogItem, props: InstalledPluginsProps): TemplateResult {
+function renderCard(plugin: InstalledPluginItem, props: InstalledPluginsProps): TemplateResult {
   const open = () => props.onOpenSettings(plugin.id);
   const attribution = props.attributions?.get(plugin.id) ?? { official: false };
   return html`
@@ -113,10 +194,7 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
   const filtered = props.searchOpen
     ? installed.filter((plugin) => matchesPlugin(plugin, props.query))
     : installed;
-  const visible =
-    props.searchOpen || props.expanded
-      ? filtered
-      : filtered.slice(0, INSTALLED_PLUGINS_INITIAL_LIMIT);
+  const groups = groupInstalledPlugins(filtered);
   const closeSearch = (source: Element) => {
     const actions = source.closest(".installed-plugins__actions");
     props.onSearchOpenChange(false);
@@ -223,7 +301,7 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
               </div>`
             : !props.connected
               ? html`<p class="plugin-catalog-results__empty">${t("pluginsPage.offlineBody")}</p>`
-              : visible.length === 0
+              : filtered.length === 0
                 ? html`<p class="plugin-catalog-results__empty">
                     ${
                       props.query
@@ -231,30 +309,44 @@ export function renderInstalledPlugins(props: InstalledPluginsProps): TemplateRe
                         : t("pluginsPage.noInstalledTitle")
                     }
                   </p>`
-                : html`<div class="installed-plugins__grid">
+                : html`<div class="installed-plugins__groups">
                     ${repeat(
-                      visible,
-                      (plugin) => plugin.id,
-                      (plugin) => renderCard(plugin, props),
+                      groups,
+                      (group) => group.category,
+                      (group) => html`
+                        <section
+                          class=${`installed-plugins__group ${
+                            props.searchOpen || props.expanded ? "is-expanded" : ""
+                          }`}
+                          data-plugin-category=${group.category}
+                        >
+                          <header class="installed-plugins__group-header">
+                            <h3>${installedCategoryLabel(group.category)}</h3>
+                            <button
+                              type="button"
+                              class="btn btn--sm installed-plugins__group-action oc-action oc-action-ghost"
+                              @click=${() => props.onExpandedChange(!props.expanded)}
+                            >
+                              ${
+                                props.expanded
+                                  ? t("pluginsPage.hideInstalledPlugins")
+                                  : t("pluginsPage.viewAllInstalledPlugins")
+                              }
+                            </button>
+                          </header>
+                          <div class="installed-plugins__grid">
+                            ${repeat(
+                              props.searchOpen || props.expanded
+                                ? group.plugins
+                                : group.plugins.slice(0, INSTALLED_PLUGINS_ROW_LIMIT),
+                              (plugin) => plugin.id,
+                              (plugin) => renderCard(plugin, props),
+                            )}
+                          </div>
+                        </section>
+                      `,
                     )}
                   </div>`
-      }
-      ${
-        !props.searchOpen && (installed.length > INSTALLED_PLUGINS_INITIAL_LIMIT || props.expanded)
-          ? html`<div class="installed-plugins__more">
-              <button
-                type="button"
-                class="btn btn--sm installed-plugins__more-action oc-action oc-action-ghost"
-                @click=${() => props.onExpandedChange(!props.expanded)}
-              >
-                ${
-                  props.expanded
-                    ? t("pluginsPage.hideInstalledPlugins")
-                    : t("pluginsPage.showAllPlugins", { count: String(installed.length) })
-                }
-              </button>
-            </div>`
-          : nothing
       }
     </section>
   `;
