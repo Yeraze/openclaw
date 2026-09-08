@@ -17,6 +17,7 @@ import type {
 import { renderPluginCatalogDetail, type PluginCatalogDetailTab } from "./catalog-detail.ts";
 import { renderPluginCatalogResults } from "./catalog-results.ts";
 import { renderPluginConsentDialog } from "./consent-dialog.ts";
+import type { InstalledPluginDetailTab } from "./detail-tabs.ts";
 import type { InstallWizardController } from "./install-wizard-controller.ts";
 import {
   installRequestForDiscoveryDetail,
@@ -67,6 +68,7 @@ type PluginsPageViewActions = {
   reloadConfig: () => void;
   closeSettingsDetail: (parentRoute: "plugins" | "plugin-settings") => void;
   retrySettingsDetail: (pluginId: string) => void;
+  selectInstalledDetailTab: (tab: InstalledPluginDetailTab) => void;
   selectSettingsTab: (tab: PluginSettingsTab) => void;
 };
 
@@ -90,6 +92,7 @@ export type PluginsPageViewModel = {
   pageNotice: PluginRowMessage | null;
   catalogDetail: CatalogDetailState | null;
   catalogDetailTab: PluginCatalogDetailTab;
+  installedDetailTab: InstalledPluginDetailTab;
   installWizard: PluginInstallWizardState | null;
   mutationBlockedReason: string | null;
   canMutate: boolean;
@@ -256,8 +259,10 @@ export function renderPluginsPage(model: PluginsPageViewModel) {
                 backHref: pathForRoute(settingsParentRoute, context.basePath),
                 backLabel:
                   settingsParentRoute === "plugins" ? t("tabs.plugins") : t("nav.settings"),
+                tab: model.installedDetailTab,
                 onBack: () => actions.closeSettingsDetail(settingsParentRoute),
                 onRetryInspection: () => actions.retrySettingsDetail(detailPluginId),
+                onTabChange: actions.selectInstalledDetailTab,
               })
             : renderPluginSettingsInventory({
                 ...settingsShared,
