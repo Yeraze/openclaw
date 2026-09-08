@@ -658,7 +658,8 @@ describe("plugin management Gateway handlers", () => {
       installed: true,
       enabled: false,
       state: "needs-setup" as const,
-      category: "tool",
+      categories: ["tools"],
+      category: "tools",
     };
     managementMocks.list.mockResolvedValue({
       plugins: [localOnly],

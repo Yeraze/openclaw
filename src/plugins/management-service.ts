@@ -8,6 +8,7 @@ import type {
 import { resolveConfigWidePluginMetadataSnapshot } from "../config/io.plugin-metadata.js";
 import { resolveIsConfigReadOnly } from "../config/paths.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { fetchClawHubPluginVersionCategories } from "../infra/clawhub-plugin-catalog.js";
 import { resolvePendingPluginCapabilityReview } from "./capability-consent.js";
 import {
   buildPluginCapabilitySummary,
@@ -39,7 +40,6 @@ import {
   normalizeKinds,
   normalizeCatalogMetadata,
   normalizeFeaturedAt,
-  derivePluginCategory,
   firstPluginError,
   compareCatalogEntries,
   resolveInstalledPluginPresentation,
@@ -85,6 +85,12 @@ function resolveManagedPluginState(params: {
 }
 
 export type ManagedPluginInspection = PluginsInspectResult;
+
+const CLAWHUB_CATEGORY_BATCH_LIMIT = 200;
+
+function pluginVersionKey(name: string, version: string): string {
+  return JSON.stringify([name, version]);
+}
 
 function resolveManagedPluginDiagnostics(
   snapshot: PluginMetadataSnapshot,
@@ -251,6 +257,13 @@ export const listManagedPlugins = withManagedPluginCache(
     const installedIconsById = new Map<string, ManagedPluginIconSource | undefined>();
     const installedClawHubPackages = new Set<string>();
     const capabilityConsentDiagnostics: PluginDiagnostic[] = [];
+    const categoryTargets = new Map<
+      string,
+      {
+        request: { name: string; version: string };
+        plugins: ManagedPluginCatalogEntry[];
+      }
+    >();
     // Hosted loading can yield; prepare this phase from the current config.
     const isEnabled = createInstalledPluginEnabledPredicate(
       metadata.index.plugins,
@@ -315,7 +328,7 @@ export const listManagedPlugins = withManagedPluginCache(
       const configError = setup.mode === "invalid" ? setup.error : undefined;
       const error = firstPluginError(pluginDiagnostics, record.pluginId) ?? configError;
       const kind = normalizeKinds(manifest?.kind);
-      const category = derivePluginCategory(manifest);
+      const categories = manifest?.categories;
       // Only externally installed plugins (tracked install record, non-bundled) can be removed.
       const removable = record.origin !== "bundled" && Boolean(installOwner);
       const hostedListingAuthoritative =
@@ -380,11 +393,61 @@ export const listManagedPlugins = withManagedPluginCache(
       if (error) {
         plugin.error = error;
       }
-      if (category) {
-        plugin.category = category;
+      if (categories?.length) {
+        plugin.categories = [...categories];
+        plugin.category = categories[0];
+      } else if (record.origin !== "bundled" && installRecord?.source === "clawhub") {
+        const name = normalizeOptionalString(installRecord.clawhubPackage);
+        const version = normalizeOptionalString(installRecord.version);
+        if (name && version) {
+          const key = pluginVersionKey(name, version);
+          const target = categoryTargets.get(key);
+          if (target) {
+            target.plugins.push(plugin);
+          } else if (categoryTargets.size < CLAWHUB_CATEGORY_BATCH_LIMIT) {
+            categoryTargets.set(key, { request: { name, version }, plugins: [plugin] });
+          }
+        }
       }
       return plugin;
     });
+    if (categoryTargets.size > 0) {
+      try {
+        const cache = getManagedPluginCache();
+        if (!cache.pluginVersionCategories) {
+          const load = fetchClawHubPluginVersionCategories({
+            packages: [...categoryTargets.values()].map((target) => target.request),
+          }).then(
+            (results) =>
+              new Map(
+                results.map(
+                  (result) =>
+                    [pluginVersionKey(result.name, result.version), result.categories] as const,
+                ),
+              ),
+          );
+          cache.pluginVersionCategories = load;
+          void load.catch(() => {
+            if (cache.pluginVersionCategories === load) {
+              cache.pluginVersionCategories = undefined;
+            }
+          });
+        }
+        const resolved = await cache.pluginVersionCategories;
+        for (const [key, target] of categoryTargets) {
+          const categories = resolved.get(key);
+          if (!categories?.length) {
+            continue;
+          }
+          for (const plugin of target.plugins) {
+            plugin.categories = [...categories];
+            plugin.category = categories[0];
+          }
+        }
+      } catch {
+        // Registry metadata is optional presentation data. Installed plugins remain usable offline.
+      }
+    }
     const installedIds = new Set(plugins.map((plugin) => plugin.id));
     const installedPackageNames = new Set(
       plugins.flatMap((plugin) => (plugin.packageName ? [plugin.packageName] : [])),

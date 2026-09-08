@@ -163,7 +163,9 @@ export const PluginCatalogEntrySchema = closedObject({
   hasIcon: Type.Optional(Type.Boolean()),
   install: Type.Optional(PluginCatalogInstallActionSchema),
   error: Type.Optional(Type.String()),
-  /** Coarse manifest-derived grouping (channel, provider, memory, ...) for catalog UIs. */
+  /** Ordered package or registry categories; the first category is primary. */
+  categories: Type.Optional(Type.Array(NonEmptyString, { minItems: 1, maxItems: 3 })),
+  /** Compatibility projection of the primary category. */
   category: Type.Optional(NonEmptyString),
   /** True when the plugin has an install record and can be removed via plugins.uninstall. */
   removable: Type.Optional(Type.Boolean()),

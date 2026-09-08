@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   persistInstall: vi.fn(),
   preflight: vi.fn(),
   providerAuthChoices: vi.fn(),
+  pluginVersionCategories: vi.fn(),
   readConfig: vi.fn(),
   recommendedInstalls: vi.fn(),
   refreshRegistry: vi.fn(),
@@ -103,11 +104,17 @@ vi.mock("./provider-auth-choices.js", () => ({
   resolveManifestProviderAuthChoices: (...args: unknown[]) => mocks.providerAuthChoices(...args),
 }));
 
+vi.mock("../infra/clawhub-plugin-catalog.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../infra/clawhub-plugin-catalog.js")>()),
+  fetchClawHubPluginVersionCategories: (...args: unknown[]) =>
+    mocks.pluginVersionCategories(...args),
+}));
+
 vi.mock("./recommended-tool-installs.js", () => ({
   listRecommendedToolInstalls: (...args: unknown[]) => mocks.recommendedInstalls(...args),
 }));
 
-const { clearManagedPluginOfficialCatalogCache } = await import("./management-catalog.js");
+const { clearManagedPluginCatalogCache } = await import("./management-catalog.js");
 const { listManagedPlugins, resolveManagedPluginIconSource, resolveManagedSetupCatalogIconUrl } =
   await import("./management-service.js");
 const { setManagedPluginEnabled } = await import("./management-mutations.js");
@@ -124,7 +131,7 @@ function mockHostedOfficialCatalog(entries: unknown[]) {
 
 describe("plugin management service", () => {
   beforeEach(() => {
-    clearManagedPluginOfficialCatalogCache();
+    clearManagedPluginCatalogCache();
     for (const mock of Object.values(mocks)) {
       if (typeof mock === "function" && "mockReset" in mock) {
         mock.mockReset();
@@ -139,6 +146,7 @@ describe("plugin management service", () => {
     mocks.installRecords.mockResolvedValue({});
     mocks.applyUninstall.mockResolvedValue({ directoryRemoved: true, warnings: [] });
     mocks.providerAuthChoices.mockReturnValue([]);
+    mocks.pluginVersionCategories.mockResolvedValue([]);
     mocks.recommendedInstalls.mockReturnValue([]);
     mocks.clawReferenceWarnings.mockReturnValue([]);
     mockHostedOfficialCatalog([]);
@@ -285,7 +293,6 @@ describe("plugin management service", () => {
       env: {},
       officialCatalog: { entries: [] },
     });
-
     expect(catalog.plugins).toEqual([
       expect.objectContaining({
         id: "workboard",
@@ -298,6 +305,117 @@ describe("plugin management service", () => {
       }),
     ]);
     expect(catalog.mutationAllowed).toBe(true);
+  });
+
+  it("projects package-declared categories without consulting ClawHub", async () => {
+    mocks.metadata.mockReturnValue(
+      metadataSnapshot({
+        enabled: true,
+        id: "memory-tools",
+        name: "Memory Tools",
+        origin: "global",
+        categories: ["memory", "tools"],
+        packageVersion: "1.2.3",
+        installRecord: {
+          source: "clawhub",
+          clawhubPackage: "@openclaw/memory-tools",
+          version: "1.2.3",
+        },
+      }),
+    );
+
+    const catalog = await listManagedPlugins({
+      config: {},
+      env: {},
+      officialCatalog: { entries: [] },
+    });
+
+    expect(catalog.plugins[0]).toMatchObject({
+      categories: ["memory", "tools"],
+      category: "memory",
+    });
+    expect(mocks.pluginVersionCategories).not.toHaveBeenCalled();
+  });
+
+  it("batch-enriches missing categories from the exact installed ClawHub version", async () => {
+    mocks.metadata.mockReturnValue(
+      metadataSnapshot({
+        enabled: true,
+        id: "community-memory",
+        name: "Community Memory",
+        origin: "global",
+        packageVersion: "4.5.6",
+        installRecord: {
+          source: "clawhub",
+          clawhubPackage: "community/memory",
+          version: "4.5.6",
+        },
+      }),
+    );
+    mocks.pluginVersionCategories.mockResolvedValue([
+      {
+        name: "community/memory",
+        version: "4.5.6",
+        categories: ["memory", "tools"],
+      },
+    ]);
+
+    const catalog = await listManagedPlugins({
+      config: {},
+      env: {},
+      officialCatalog: { entries: [] },
+    });
+    const cached = await listManagedPlugins({
+      config: {},
+      env: {},
+      officialCatalog: { entries: [] },
+    });
+
+    expect(mocks.pluginVersionCategories).toHaveBeenCalledOnce();
+    expect(mocks.pluginVersionCategories).toHaveBeenCalledWith({
+      packages: [{ name: "community/memory", version: "4.5.6" }],
+    });
+    expect(catalog.plugins[0]).toMatchObject({
+      categories: ["memory", "tools"],
+      category: "memory",
+    });
+    expect(cached.plugins[0]).toMatchObject({
+      categories: ["memory", "tools"],
+      category: "memory",
+    });
+  });
+
+  it("keeps installed plugins uncategorized when ClawHub enrichment is unavailable", async () => {
+    mocks.metadata.mockReturnValue(
+      metadataSnapshot({
+        enabled: true,
+        id: "community-tool",
+        name: "Community Tool",
+        origin: "global",
+        packageVersion: "1.0.0",
+        installRecord: {
+          source: "clawhub",
+          clawhubPackage: "community/tool",
+          version: "1.0.0",
+        },
+      }),
+    );
+    mocks.pluginVersionCategories.mockRejectedValue(new Error("ClawHub offline"));
+
+    const catalog = await listManagedPlugins({
+      config: {},
+      env: {},
+      officialCatalog: { entries: [] },
+    });
+
+    expect(catalog.plugins[0]).toMatchObject({
+      id: "community-tool",
+      installed: true,
+      enabled: true,
+      state: "enabled",
+    });
+    expect(catalog.plugins[0]).not.toHaveProperty("categories");
+    expect(catalog.plugins[0]).not.toHaveProperty("category");
   });
 
   it.each([

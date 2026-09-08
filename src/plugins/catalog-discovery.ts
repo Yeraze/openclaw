@@ -181,14 +181,14 @@ export function joinClawHubPluginCatalog(params: {
   const localOnly = params.local.plugins
     .filter((plugin) => plugin.origin === "bundled" && !publishedLocalPlugins.has(plugin))
     .filter((plugin) => {
-      const category = localDiscoveryCategory(plugin.category);
-      if (params.category && category !== params.category) {
+      const categories = localDiscoveryCategories(plugin);
+      if (params.category && !categories.includes(params.category)) {
         return false;
       }
       if (!query) {
         return true;
       }
-      return [plugin.id, plugin.packageName, plugin.name, plugin.description]
+      return [plugin.id, plugin.packageName, plugin.name, plugin.description, ...categories]
         .flatMap((value) => (value ? [value.toLowerCase()] : []))
         .some((value) => value.includes(query));
     })
@@ -197,20 +197,8 @@ export function joinClawHubPluginCatalog(params: {
   return [...localOnly, ...remote];
 }
 
-function localDiscoveryCategory(category: string | undefined): string {
-  if (category === "channel") {
-    return "channels";
-  }
-  if (category === "provider") {
-    return "models";
-  }
-  if (category === "context-engine") {
-    return "context";
-  }
-  if (category === "tool") {
-    return "tools";
-  }
-  return category || "other";
+function localDiscoveryCategories(plugin: PluginCatalogEntry): string[] {
+  return plugin.categories ?? (plugin.category ? [plugin.category] : []);
 }
 
 function localDiscoveryIdentity(plugin: PluginCatalogEntry): string {
@@ -227,7 +215,7 @@ function projectLocalDiscoveryEntry(
       name: plugin.name,
       ...(plugin.description ? { summary: plugin.description } : {}),
       official: false,
-      categories: [localDiscoveryCategory(plugin.category)],
+      categories: localDiscoveryCategories(plugin),
       publishedToClawHub: false,
       ...(plugin.version ? { latestVersion: plugin.version } : {}),
     },

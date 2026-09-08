@@ -109,7 +109,8 @@ describe("plugin discovery identity and local join", () => {
       installed: false,
       enabled: false,
       state: "not-installed" as const,
-      category: "tool",
+      categories: ["tools", "web"],
+      category: "tools",
       install: { source: "official" as const, pluginId: "calendar-local" },
     };
     const local = { plugins: [bundledOnly], diagnostics: [], mutationAllowed: true };
@@ -125,13 +126,13 @@ describe("plugin discovery identity and local join", () => {
       includeBundledOnly: true,
       published: [remote],
       intent: "bundled",
-      category: "tools",
+      category: "web",
     });
 
     expect(all.map((item) => item.catalog.name)).toEqual(["Memory Plus"]);
     expect(tools).toHaveLength(1);
     expect(tools[0]).toMatchObject({
-      catalog: { categories: ["tools"], official: false },
+      catalog: { categories: ["tools", "web"], official: false },
       local: {
         present: true,
         action: "install",
