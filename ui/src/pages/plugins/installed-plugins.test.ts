@@ -231,21 +231,45 @@ describe("renderInstalledPlugins", () => {
     expect(onOpenSettings).toHaveBeenLastCalledWith();
   });
 
-  it("keeps setup-required state visible as read-only inventory context", () => {
+  it("shows every installed state as an accessible title-row notification", () => {
     const container = mount(
       baseProps({
+        expanded: true,
         result: createResult([
+          createPlugin({ id: "enabled", name: "Enabled plugin", enabled: true, state: "enabled" }),
+          createPlugin({ id: "disabled", name: "Disabled plugin", state: "disabled" }),
           createPlugin({ id: "needs-setup", name: "Needs Setup", state: "needs-setup" }),
+          createPlugin({ id: "error", name: "Error plugin", state: "error", error: "Broken" }),
         ]),
       }),
     );
 
-    const card = expectDefined(
-      container.querySelector<HTMLElement>('[data-plugin-id="needs-setup"]'),
-      "needs-setup plugin card",
-    );
-    expect(card.textContent).toContain("Setup required");
-    expect(card.getAttribute("data-plugin-status")).toBe("needs-setup");
-    expect(card.querySelector("wa-switch")).toBeNull();
+    const expected = [
+      ["enabled", "Enabled", "settings-status--ok"],
+      ["disabled", "Disabled", "settings-status--muted"],
+      [
+        "needs-setup",
+        "Additional configuration required before this plugin can be enabled.",
+        "settings-status--warn",
+      ],
+      ["error", "Needs attention", "settings-status--danger"],
+    ] as const;
+    for (const [state, label, tone] of expected) {
+      const card = expectDefined(
+        container.querySelector<HTMLElement>(`[data-plugin-id="${state}"]`),
+        `${state} plugin card`,
+      );
+      const notice = expectDefined(
+        card.querySelector<HTMLElement>(".installed-plugins-card__status-notice"),
+        `${state} notification`,
+      );
+      expect(notice.closest(".plugin-card-title-row")).not.toBeNull();
+      expect(notice.dataset.pluginState).toBe(state);
+      expect(notice.classList.contains(tone)).toBe(true);
+      expect(notice.getAttribute("aria-label")).toBe(label);
+      expect(notice.getAttribute("title")).toBe(label);
+      expect(card.getAttribute("data-plugin-status")).toBe(state);
+      expect(card.querySelector("wa-switch")).toBeNull();
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   createContext,
   createGateway,
   createInspectResult,
+  createPlugin,
   createPluginsRouteData,
   createPluginsRouteLocation,
   createResult,
@@ -139,5 +140,54 @@ describe("PluginsPage routing", () => {
     expect(context.navigate).toHaveBeenCalledWith(testCase.target, {
       pathname: testCase.pathname,
     });
+  });
+
+  it("explains required setup below the description and blocks enabling", async () => {
+    const plugin = createPlugin({
+      id: "team-reports",
+      name: "Team Reports",
+      description: "Daily team activity reports.",
+      state: "needs-setup",
+    });
+    const result = createResult(plugin);
+    const { client } = createClient(async (method) =>
+      method === "plugins.inspect"
+        ? createInspectResult({
+            plugin: {
+              id: plugin.id,
+              name: plugin.name,
+              origin: plugin.origin,
+              installed: true,
+              enabled: false,
+            },
+          })
+        : result,
+    );
+    const harness = createGateway(client);
+    const context = createContext(harness.gateway);
+    const routeData = createPluginsRouteData(
+      harness.gateway,
+      result,
+      createPluginsRouteLocation("/settings/plugins/team-reports"),
+    );
+    const { page } = await mountPage(context, routeData);
+    await switchToSettingsSurface(page, routeData);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector("h1")?.textContent).toContain("Team Reports");
+    });
+    const alert = page.querySelector(".plugins-settings-detail-setup");
+    expect(alert?.textContent?.trim()).toBe(
+      "Additional configuration required before this plugin can be enabled.",
+    );
+    expect(
+      page.querySelector(".plugins-settings-detail-hero + .plugins-settings-detail-setup"),
+    ).toBe(alert);
+    expect(alert?.classList.contains("warn")).toBe(true);
+    expect(alert?.querySelector(".plugins-settings-detail-setup__icon svg")).not.toBeNull();
+    expect(page.querySelector(".plugins-settings-detail-actions .settings-status")).toBeNull();
+    expect(
+      page.querySelector(".plugins-settings-detail-actions wa-switch")?.hasAttribute("disabled"),
+    ).toBe(true);
   });
 });

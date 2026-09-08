@@ -217,9 +217,26 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       expect(hoverMoreAppearance.filter).toBe("brightness(1.35)");
       await showAll.click();
       expect(await cards.count()).toBe(16);
-      expect(await page.locator('[data-plugin-id="needs-setup"]').textContent()).toContain(
-        "Setup required",
+      const setupCard = page.locator('[data-plugin-id="needs-setup"]');
+      const setupNotice = setupCard.getByRole("img", {
+        name: "Additional configuration required before this plugin can be enabled.",
+        exact: true,
+      });
+      expect(await setupNotice.count()).toBe(1);
+      expect(await setupNotice.getAttribute("title")).toBe(
+        "Additional configuration required before this plugin can be enabled.",
       );
+      await setupNotice.hover();
+      const setupTooltip = page.locator("openclaw-tooltip wa-tooltip[open]").filter({
+        hasText: "Additional configuration required before this plugin can be enabled.",
+      });
+      await expect.poll(() => setupTooltip.count()).toBe(1);
+      expect(
+        await setupNotice
+          .locator("xpath=ancestor::*[contains(@class, 'plugin-card-title-row')]")
+          .count(),
+      ).toBe(1);
+      expect(await setupCard.textContent()).not.toContain("Setup required");
       await page.getByRole("button", { name: "Hide", exact: true }).click();
       expect(await cards.count()).toBe(9);
 

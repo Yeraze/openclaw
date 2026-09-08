@@ -96,6 +96,7 @@ function renderCard(plugin: PluginCatalogItem, props: InstalledPluginsProps): Te
           name: plugin.name,
           attribution,
           showAuthor: false,
+          state: plugin.state === "not-installed" ? undefined : plugin.state,
           subtitle: plugin.description || t("pluginsPage.optionalCapability"),
         })}
       </div>
@@ -104,13 +105,7 @@ function renderCard(plugin: PluginCatalogItem, props: InstalledPluginsProps): Te
           ? html`<p class="installed-plugins-card__error" role="alert">
               ${formatUiExternalText(plugin.error)}
             </p>`
-          : plugin.state === "needs-setup"
-            ? html`<p
-                class="installed-plugins-card__message installed-plugins-card__message--warning"
-              >
-                ${t("pluginsPage.setupRequired")}
-              </p>`
-            : nothing
+          : nothing
       }
     </a>
   `;

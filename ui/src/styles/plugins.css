@@ -203,6 +203,14 @@ a.installed-plugins-card,
   padding: 7px;
 }
 
+a.installed-plugins-card .installed-plugins-card__art:has(> img.plugins-icon) {
+  border: 0;
+}
+
+a.installed-plugins-card .installed-plugins-card__art > img.plugins-icon {
+  padding: 0;
+}
+
 .installed-plugins-card__art--fallback {
   border-color: transparent;
   background: linear-gradient(135deg, var(--plugins-art-a), var(--plugins-art-b));
@@ -242,6 +250,11 @@ a.installed-plugins-card,
 
 .plugin-card-title-row h3 {
   min-width: 0;
+}
+
+.installed-plugins-card__status-notice {
+  align-self: center;
+  margin-inline-start: auto;
 }
 
 .plugin-card-author {
@@ -294,22 +307,13 @@ a.installed-plugins-card,
   -webkit-line-clamp: 2;
 }
 
-.installed-plugins-card__error,
-.installed-plugins-card__message {
+.installed-plugins-card__error {
   grid-column: 1 / -1;
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
   color: var(--danger);
   font-size: var(--control-ui-text-xs);
   line-height: 1.4;
-}
-
-.installed-plugins-card__message--success {
-  color: var(--ok);
-}
-
-.installed-plugins-card__message--warning {
-  color: var(--warn);
 }
 
 .installed-plugins__more {
@@ -382,10 +386,18 @@ a.installed-plugins-card,
   background: linear-gradient(145deg, var(--bg), var(--bg-elevated));
 }
 
-.plugin-featured-card__art svg,
-.plugin-featured-card__art img {
+.plugin-featured-card__art svg {
   width: 24px;
   height: 24px;
+}
+
+.plugin-featured-card__art img {
+  width: 100%;
+  height: 100%;
+}
+
+.plugin-featured-card__art img.plugins-icon {
+  padding: 0;
 }
 
 .plugin-featured-card__art img,
@@ -641,10 +653,15 @@ a.installed-plugins-card,
   color: var(--muted);
 }
 
-.plugin-catalog-result__icon svg,
-.plugin-catalog-result__icon img {
+.plugin-catalog-result__icon svg {
   width: 15px;
   height: 15px;
+}
+
+.plugin-catalog-result__icon img {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
 }
 
 .plugin-catalog-result__identity {
@@ -1861,6 +1878,23 @@ h3.plugins-subheader {
   color: var(--muted);
   font-size: var(--control-ui-text-sm);
   line-height: 1.45;
+}
+
+.plugins-settings-detail-setup {
+  width: 100%;
+  margin-block: var(--space-2) var(--space-4);
+  border-color: color-mix(in srgb, var(--oc-status-warning-fg) 34%, var(--oc-border-subtle));
+  background: var(--oc-status-warning-bg);
+  color: var(--oc-status-warning-fg);
+}
+
+.plugins-settings-detail-setup__icon {
+  display: inline-flex;
+}
+
+.plugins-settings-detail-setup__icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .plugins-settings-detail-actions {

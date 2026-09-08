@@ -233,6 +233,18 @@ class PluginsPage extends OpenClawLightDomElement {
     }
   }
 
+  override updated() {
+    const renderedPluginIds = new Set<string>();
+    // Rendered tile markers preserve the inventory's sorting, filtering, and collapse policy.
+    for (const tile of this.querySelectorAll<HTMLElement>("[data-plugin-icon-id]")) {
+      const pluginId = tile.dataset.pluginIconId;
+      if (pluginId) {
+        renderedPluginIds.add(pluginId);
+      }
+    }
+    this.pluginIcons.sync(this.result, renderedPluginIds);
+  }
+
   override connectedCallback() {
     super.connectedCallback();
     document.addEventListener("keydown", this.handleDocumentKeydown, true);
@@ -392,7 +404,6 @@ class PluginsPage extends OpenClawLightDomElement {
       this.pluginIcons.reset();
     }
     this.result = result;
-    this.pluginIcons.sync(result);
   }
 
   private get loading(): boolean {

@@ -227,6 +227,7 @@ export function renderPluginsPage(model: PluginsPageViewModel) {
                         category: discovery.category,
                         query: discovery.query,
                         iconUrls: model.catalogIconUrls,
+                        pluginIconUrls: model.iconUrls,
                         entryHref: (id) => pathForPluginCatalogEntry(id, context.basePath),
                         onIntentChange: (intent) => discovery.selectIntent(intent),
                         onCategoryChange: (category) => discovery.selectCategory(category),

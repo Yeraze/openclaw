@@ -17,6 +17,7 @@ import {
   renderPluginCardSummary,
   renderPluginOfficialBadge,
 } from "./plugin-card.ts";
+import { pluginArtPath } from "./presentation.ts";
 
 export type PluginDiscoveryIntent = "all" | "bundled" | "trending" | "official";
 
@@ -39,6 +40,7 @@ export type PluginCatalogResultsProps = {
   category: string | null;
   query: string;
   iconUrls: Readonly<Record<string, string>>;
+  pluginIconUrls: Readonly<Record<string, string>>;
   entryHref: (id: string) => string;
   onIntentChange: (intent: PluginDiscoveryIntent) => void;
   onCategoryChange: (category: string | null) => void;
@@ -74,8 +76,19 @@ function renderCatalogIcon(
   plugin: PluginDiscoveryEntry,
   props: PluginCatalogResultsProps,
 ): TemplateResult {
-  const blobUrl = plugin.catalog.imageUrl ? props.iconUrls[plugin.catalog.imageUrl] : undefined;
-  return blobUrl ? html`<img src=${blobUrl} alt="" />` : categoryIcon(plugin.catalog.icon);
+  const pluginId = plugin.local.pluginId;
+  const packageIcon = pluginId ? props.pluginIconUrls[pluginId] : undefined;
+  if (packageIcon) {
+    return html`<img class="plugins-icon" src=${packageIcon} alt="" />`;
+  }
+  const catalogIcon = plugin.catalog.imageUrl ? props.iconUrls[plugin.catalog.imageUrl] : undefined;
+  if (catalogIcon) {
+    return html`<img src=${catalogIcon} alt="" />`;
+  }
+  const legacyArt = pluginId ? pluginArtPath(pluginId) : null;
+  return legacyArt
+    ? html`<img src=${legacyArt} alt="" loading="lazy" decoding="async" />`
+    : categoryIcon(plugin.catalog.icon);
 }
 
 export function formatCompactCount(value: number): string {
@@ -135,7 +148,11 @@ function renderFeaturedCard(
       }}
     ></a>
     <div class="installed-plugins-card__head">
-      <span class="installed-plugins-card__art plugin-featured-card__art" aria-hidden="true">
+      <span
+        class="installed-plugins-card__art plugin-featured-card__art"
+        aria-hidden="true"
+        data-plugin-icon-id=${plugin.local.pluginId ?? nothing}
+      >
         ${renderCatalogIcon(plugin, props)}
       </span>
       ${renderPluginCardIdentity({
@@ -278,7 +295,11 @@ function renderResultRow(
         props.onOpenEntry(plugin.id);
       }}
     ></a>
-    <span class="plugin-catalog-result__icon" aria-hidden="true">
+    <span
+      class="plugin-catalog-result__icon"
+      aria-hidden="true"
+      data-plugin-icon-id=${plugin.local.pluginId ?? nothing}
+    >
       ${renderCatalogIcon(plugin, props)}
     </span>
     <div class="plugin-catalog-result__identity">

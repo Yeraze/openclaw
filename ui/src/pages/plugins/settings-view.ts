@@ -197,13 +197,17 @@ function renderInstalledInventory(props: InventoryProps): TemplateResult {
     (plugin) => {
       const key = pluginRowKey(plugin.id);
       const busy = Boolean(props.busy[key]);
+      const setupBlockedReason =
+        plugin.state === "needs-setup" ? t("pluginsPage.setupRequiredNotice") : null;
       const toggle = renderSettingsToggle({
         checked: plugin.enabled,
-        disabled: !props.mutationBlockedReason && (!props.canMutate || busy),
-        ariaDisabled: !props.canMutate,
+        disabled:
+          Boolean(setupBlockedReason) ||
+          (!props.mutationBlockedReason && (!props.canMutate || busy)),
+        ariaDisabled: Boolean(setupBlockedReason) || !props.canMutate,
         ariaLabel: t("pluginsPage.toggleNamed", { name: plugin.name }),
         onChange: (enabled) => {
-          if (!props.canMutate || busy) {
+          if (setupBlockedReason || !props.canMutate || busy) {
             return false;
           }
           props.onSetEnabled(plugin.id, enabled, key);
@@ -241,7 +245,7 @@ function renderInstalledInventory(props: InventoryProps): TemplateResult {
             >
           </a>
           <div class="settings-row__control oc-settings-row-control">
-            ${renderReasonedDisabledControl(props.mutationBlockedReason, toggle)}
+            ${renderReasonedDisabledControl(setupBlockedReason ?? props.mutationBlockedReason, toggle)}
             <span class="settings-row__chevron" aria-hidden="true">${icons.chevronRight}</span>
           </div>
           ${renderMessage(props.messages[key])}
@@ -559,12 +563,13 @@ export function renderPluginSettingsDetail(props: DetailProps): TemplateResult {
   const key = pluginRowKey(plugin.id);
   const statePresentation = pluginStatePresentation(plugin);
   const stateStatus =
-    plugin.state === "needs-setup" || plugin.state === "error"
+    plugin.state === "error"
       ? renderSettingsStatus({
           ...statePresentation,
           carapace: true,
         })
       : nothing;
+  const setupRequired = plugin.state === "needs-setup";
   return renderSettingsPage(
     html`<section class="plugins-settings-detail-header">
         <nav class="plugins-settings-breadcrumb" aria-label=${t("pluginsPage.breadcrumb")}>
@@ -599,11 +604,12 @@ export function renderPluginSettingsDetail(props: DetailProps): TemplateResult {
               renderSettingsToggle({
                 checked: plugin.enabled,
                 disabled:
-                  !props.mutationBlockedReason && (!props.canMutate || Boolean(props.busy[key])),
-                ariaDisabled: !props.canMutate,
+                  setupRequired ||
+                  (!props.mutationBlockedReason && (!props.canMutate || Boolean(props.busy[key]))),
+                ariaDisabled: setupRequired || !props.canMutate,
                 ariaLabel: t("pluginsPage.toggleNamed", { name: plugin.name }),
                 onChange: (enabled) => {
-                  if (!props.canMutate || props.busy[key]) {
+                  if (setupRequired || !props.canMutate || props.busy[key]) {
                     return false;
                   }
                   props.onSetEnabled(plugin.id, enabled, key);
@@ -613,6 +619,21 @@ export function renderPluginSettingsDetail(props: DetailProps): TemplateResult {
             )}
           </div>
         </div>
+        ${
+          setupRequired
+            ? html`<div
+                class="callout warn oc-banner oc-banner-warning plugins-settings-detail-setup"
+                role="status"
+              >
+                <span class="plugins-settings-detail-setup__icon" aria-hidden="true"
+                  >${icons.alertTriangle}</span
+                >
+                <div class="oc-banner-content">
+                  <p>${t("pluginsPage.setupRequiredNotice")}</p>
+                </div>
+              </div>`
+            : nothing
+        }
       </section>
       ${props.pageNotice ? renderMessage(props.pageNotice) : nothing}
       ${props.error ? renderRetryError(props.error, props.onRefresh) : nothing}
@@ -633,13 +654,7 @@ export function renderPluginSettingsDetail(props: DetailProps): TemplateResult {
                 actions: renderConfigActions(props),
                 carapace: true,
               },
-              html`${
-                plugin.state === "needs-setup"
-                  ? html`<div class="callout warning oc-banner oc-banner-warning" role="status">
-                      ${t("pluginsPage.setupRequiredDescription")}
-                    </div>`
-                  : nothing
-              }${renderConfiguration(props, plugin)}`,
+              renderConfiguration(props, plugin),
             )
           : nothing
       }

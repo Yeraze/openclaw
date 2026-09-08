@@ -3157,6 +3157,7 @@ export const en: TranslationMap & {
     installedDisabled: "Installed · Disabled",
     pluginSettings: "Plugin settings",
     setupRequired: "Setup required",
+    setupRequiredNotice: "Additional configuration required before this plugin can be enabled.",
     searchInstalledPlaceholder: "Search installed plugins",
     showAllPlugins: "Show all {count}",
     hideInstalledPlugins: "Hide",

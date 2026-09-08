@@ -1,6 +1,5 @@
 import type { PluginListResult } from "../../lib/plugins/index.ts";
 import { fetchPluginIconBlobUrl, type PluginIconFetchContext } from "./icon-loader.ts";
-import { pluginArtPath } from "./presentation.ts";
 
 type PluginIconControllerHost = {
   getFetchContext: () => PluginIconFetchContext;
@@ -20,9 +19,7 @@ export class PluginIconController {
 
   reconcile(result: PluginListResult | null) {
     const eligiblePluginIds = new Set(
-      (result?.plugins ?? [])
-        .filter((plugin) => plugin.hasIcon && !pluginArtPath(plugin.id))
-        .map((plugin) => plugin.id),
+      (result?.plugins ?? []).filter((plugin) => plugin.hasIcon).map((plugin) => plugin.id),
     );
     const nextUrls = { ...this.urls };
     let urlsChanged = false;
@@ -63,11 +60,11 @@ export class PluginIconController {
     this.publish({});
   }
 
-  sync(result: PluginListResult | null) {
+  sync(result: PluginListResult | null, renderedPluginIds: ReadonlySet<string>) {
     for (const plugin of result?.plugins ?? []) {
       if (
         !plugin.hasIcon ||
-        pluginArtPath(plugin.id) ||
+        !renderedPluginIds.has(plugin.id) ||
         this.urls[plugin.id] ||
         this.misses.has(plugin.id) ||
         this.requests.has(plugin.id)
