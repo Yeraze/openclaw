@@ -582,11 +582,17 @@ export async function fetchClawHubPluginVersionCategories(
       throw new Error(`Malformed ClawHub plugin category batch item ${index}: expected an object.`);
     }
     const rawCategories = entry.categories;
-    const categories = rawCategories === null ? null : validatePluginCategories(rawCategories);
-    if (categories !== null && (!categories.ok || !categories.categories)) {
-      throw new Error(
-        `Malformed ClawHub plugin category batch item ${index}: expected categories to be a string array or null.`,
-      );
+    let categories: string[] | null;
+    if (rawCategories === null) {
+      categories = null;
+    } else {
+      const validation = validatePluginCategories(rawCategories);
+      if (!validation.ok || !validation.categories) {
+        throw new Error(
+          `Malformed ClawHub plugin category batch item ${index}: expected categories to be a string array or null.`,
+        );
+      }
+      categories = validation.categories;
     }
     return {
       name: readRequiredClawHubStringField(entry, "name", `plugin category batch item ${index}`),
@@ -595,7 +601,7 @@ export async function fetchClawHubPluginVersionCategories(
         "version",
         `plugin category batch item ${index}`,
       ),
-      categories: categories === null ? null : categories.categories,
+      categories,
     };
   });
 }
