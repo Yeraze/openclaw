@@ -198,5 +198,5 @@ Run `openclaw doctor` after editing access-control config. It catches many inval
 
 ## Related
 
-- [Pairing](/channels/pairing) — how a channel account is bound to an operator before access groups apply
+- [Pairing](/channels/pairing) — the separate DM pairing flow for channel senders
 - [Channels overview](/channels) — the channels these groups apply to

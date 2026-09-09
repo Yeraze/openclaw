@@ -210,4 +210,4 @@ This keeps file logs stable while making interactive output scannable.
 - [Logging](/logging)
 - [OpenTelemetry export](/gateway/opentelemetry)
 - [Diagnostics export](/gateway/diagnostics)
-- [`openclaw logs`](/cli/logs) — tail and filter logs from the CLI
+- [`openclaw logs`](/cli/logs) — tail Gateway logs over RPC from the CLI

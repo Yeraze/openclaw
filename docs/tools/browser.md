@@ -94,5 +94,5 @@ still resolves. Each entry points at the page that now holds the content.
 - [Sandboxing](/gateway/sandboxing) - browser control in sandboxed environments
 - [Security](/gateway/security) - browser control risks and hardening
 - [Web fetch](/tools/web-fetch) - retrieve a page without driving a browser
-- [Diffs](/tools/diffs) - reviewing changes the agent proposes
+- [Diffs](/tools/diffs) - read-only diff viewer and file renderer for agents
 - [Browser login](/tools/browser-login) - signing a profile into a site before automating it

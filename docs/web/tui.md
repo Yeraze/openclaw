@@ -286,5 +286,5 @@ No output after sending a message:
 - [Config](/cli/config) — inspect, validate, and edit `openclaw.json`
 - [Doctor](/cli/doctor) — guided repair and migration checks
 - [CLI Reference](/cli) — full CLI command reference
-- [`openclaw resume`](/cli/resume) — reopen a previous session
+- [`openclaw resume`](/cli/resume) — attach the TUI to a recent Gateway session
 - [`openclaw tui`](/cli/tui) — command reference and flags for the terminal UI

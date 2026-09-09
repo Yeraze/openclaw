@@ -224,6 +224,10 @@
     "target": "Gateway 协议"
   },
   {
+    "source": "Gateway RPC methods",
+    "target": "Gateway RPC 方法"
+  },
+  {
     "source": "Gateway health",
     "target": "Gateway 健康"
   },

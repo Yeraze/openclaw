@@ -158,4 +158,4 @@ The health snapshot includes: `ok` (boolean), `ts` (timestamp), `durationMs` (pr
 - [Gateway runbook](/gateway)
 - [Diagnostics export](/gateway/diagnostics)
 - [Gateway troubleshooting](/gateway/troubleshooting)
-- [`openclaw health`](/cli/health) — request the same snapshot from the CLI
+- [`openclaw health`](/cli/health) — request this snapshot over RPC from the CLI
