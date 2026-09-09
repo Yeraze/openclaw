@@ -306,20 +306,19 @@ async function processGoogleChatEvent(
   // Both "message" and "live" post the same placeholder; "live" then edits it in
   // place with progress before the final collapse.
   const usesPlaceholder = typingIndicator === "message" || typingIndicator === "live";
+  const accountName = account.config.name;
+  let botName: string;
+  if (accountName?.trim()) {
+    botName = accountName.trim();
+  } else {
+    const agent = resolveAgentConfig(config, route.agentId);
+    botName = agent?.name?.trim()
+      ? agent.name.trim()
+      : agent?.identity?.name?.trim() || "OpenClaw";
+  }
   let draftStream: GoogleChatDraftStream | undefined;
   if (usesPlaceholder) {
     try {
-      const accountName = account.config.name;
-      const agentId = route.agentId;
-      let botName: string;
-      if (accountName?.trim()) {
-        botName = accountName.trim();
-      } else {
-        const agent = resolveAgentConfig(config, agentId);
-        botName = agent?.name?.trim()
-          ? agent.name.trim()
-          : agent?.identity?.name?.trim() || "OpenClaw";
-      }
       const result = await sendGoogleChatMessage({
         account,
         space: spaceId,
@@ -527,6 +526,25 @@ async function processGoogleChatEvent(
                   deliveryThreadName = sent?.threadName?.trim() || deliveryThreadName;
                 }
               };
+              // Live mode: leave the placeholder as a terminal "done" status and post the
+              // answer as new messages, so Google Chat notifies the user the reply is ready.
+              // An in-place edit would not fire a notification.
+              if (typingIndicator === "live" && deliveryTypingMessage) {
+                typingMessage = undefined;
+                try {
+                  await updateGoogleChatMessage({
+                    account,
+                    messageName: deliveryTypingMessage.name,
+                    text: `_${botName} is done — reply below._`,
+                  });
+                } catch (error) {
+                  if (!(error instanceof GoogleChatApiError) || error.status !== 404) {
+                    throw error;
+                  }
+                  runtime.error?.(`Google Chat done-status update failed: ${String(error)}`);
+                }
+                deliveryTypingMessage = undefined;
+              }
               for (const chunk of chunks) {
                 if (!chunk) {
                   continue;
