@@ -232,7 +232,6 @@ class PluginsPage extends OpenClawLightDomElement {
       this.resetPluginIcons();
       this.busy = {};
       this.mcpController.resetFeedback();
-      this.debouncedSearchQuery = "";
     }
     if (shouldRefreshAfterChange) {
       void this.mcpController.refreshPage(() => this.refreshCatalog());
