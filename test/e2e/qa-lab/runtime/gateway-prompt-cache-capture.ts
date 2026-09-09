@@ -8,10 +8,10 @@ import { hasInternalRuntimeContext } from "../../../../src/agents/internal-runti
 import type { DebugProxyCaptureReader } from "../../../../src/proxy-capture/store-readonly.js";
 import type { PromptCacheModel, PromptCacheScenario } from "./gateway-prompt-cache-contract.js";
 
-export const CACHE_CAPTURE_EVENT_LIMIT = 512;
-export const CACHE_CAPTURE_BODY_LIMIT = 2 * 1024 * 1024;
+const CACHE_CAPTURE_EVENT_LIMIT = 512;
+const CACHE_CAPTURE_BODY_LIMIT = 2 * 1024 * 1024;
 export const CACHE_SCENARIO_REQUEST_LIMIT = 8;
-export const CACHE_SCENARIO_INPUT_TOKEN_LIMIT = 240_000;
+const CACHE_SCENARIO_INPUT_TOKEN_LIMIT = 240_000;
 
 type JsonRecord = Record<string, unknown>;
 type CacheUsage = {
@@ -62,7 +62,7 @@ function nonemptyString(value: unknown, label: string): string {
   return value;
 }
 
-export function captureHash(value: unknown): string {
+function captureHash(value: unknown): string {
   return createHash("sha256")
     .update(typeof value === "string" ? value : JSON.stringify(value))
     .digest("hex");
