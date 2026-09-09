@@ -145,7 +145,7 @@
 
 .installed-plugins__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -219,14 +219,14 @@ a.installed-plugins-card,
 }
 
 .installed-plugins-card__art {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   display: grid;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg);
 }
 

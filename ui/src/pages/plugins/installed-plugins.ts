@@ -9,7 +9,7 @@ import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import type { PluginCatalogItem, PluginListResult } from "../../lib/plugins/index.ts";
 import { renderArtTile } from "./consent-dialog.ts";
 import { renderPluginCardIdentity, type PluginCardAttribution } from "./plugin-card.ts";
-const INSTALLED_PLUGINS_ROW_LIMIT = 3;
+const INSTALLED_PLUGINS_ROW_LIMIT = 4;
 const UNCATEGORIZED = "uncategorized";
 const INSTALLED_CATEGORY_ORDER = [
   "channels",

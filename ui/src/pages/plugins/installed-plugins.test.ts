@@ -128,7 +128,7 @@ describe("renderInstalledPlugins", () => {
 
   it("expands every category when any category View all action is activated", () => {
     const plugins = ["channels", "models"].flatMap((category) =>
-      Array.from({ length: 4 }, (_, index) => {
+      Array.from({ length: 5 }, (_, index) => {
         const plugin = createPlugin({
           id: `${category}-${index}`,
           name: `${category} ${index}`,
@@ -149,7 +149,7 @@ describe("renderInstalledPlugins", () => {
     };
     rerender();
 
-    expect(visiblePluginIds(container)).toHaveLength(6);
+    expect(visiblePluginIds(container)).toHaveLength(8);
     const viewAll = [...container.querySelectorAll<HTMLButtonElement>("button")].filter(
       (button) => button.textContent?.trim() === "View all",
     );
@@ -157,7 +157,7 @@ describe("renderInstalledPlugins", () => {
 
     viewAll[1]?.click();
 
-    expect(visiblePluginIds(container)).toHaveLength(8);
+    expect(visiblePluginIds(container)).toHaveLength(10);
     expect(container.querySelectorAll("[data-plugin-category]")).toHaveLength(2);
     expect(
       [...container.querySelectorAll<HTMLButtonElement>("button")].filter(
@@ -233,8 +233,13 @@ describe("renderInstalledPlugins", () => {
     };
     rerender();
 
-    expect(visiblePluginIds(container)).toHaveLength(3);
-    expect(visiblePluginIds(container)).toEqual(["attention-a", "attention-b", "needs-setup"]);
+    expect(visiblePluginIds(container)).toHaveLength(4);
+    expect(visiblePluginIds(container)).toEqual([
+      "attention-a",
+      "attention-b",
+      "needs-setup",
+      "enabled-a",
+    ]);
     expect(container.querySelector('input[type="search"]')).toBeNull();
     expect(container.textContent).not.toContain("Not Installed");
 
@@ -263,7 +268,7 @@ describe("renderInstalledPlugins", () => {
     );
     closeSearch.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
-    expect(visiblePluginIds(container)).toHaveLength(3);
+    expect(visiblePluginIds(container)).toHaveLength(4);
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Search plugins");
 
     const showAll = expectDefined(
@@ -284,7 +289,7 @@ describe("renderInstalledPlugins", () => {
     );
     hide.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
-    expect(visiblePluginIds(container)).toHaveLength(3);
+    expect(visiblePluginIds(container)).toHaveLength(4);
   });
 
   it("uses Carapace cards without repeating an inventory subtitle", () => {
