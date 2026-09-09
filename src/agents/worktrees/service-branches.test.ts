@@ -90,7 +90,7 @@ describe("ManagedWorktreeService branch discovery", () => {
         ),
       ),
       "refs/remotes/origin/z-default",
-    ].sort();
+    ].toSorted();
     await fs.writeFile(
       path.join(repo, ".git", "packed-refs"),
       "# pack-refs with: peeled fully-peeled sorted\n" +
