@@ -265,13 +265,13 @@ describe("PluginsPage icon routing", () => {
       createPluginsRouteData(harness.gateway, result, createPluginsRouteLocation("/plugins")),
     );
 
-    await waitForFast(() => expect(fetchMock).toHaveBeenCalledTimes(9));
+    await waitForFast(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(
-      plugins.slice(0, 9).map((plugin) => `/__openclaw__/plugin-icon/${plugin.id}`),
+      plugins.slice(0, 4).map((plugin) => `/__openclaw__/plugin-icon/${plugin.id}`),
     );
-    expect(page.querySelectorAll(".installed-plugins-card")).toHaveLength(9);
+    expect(page.querySelectorAll(".installed-plugins-card")).toHaveLength(4);
 
-    page.querySelector<HTMLButtonElement>(".installed-plugins__more-action")?.click();
+    page.querySelector<HTMLButtonElement>(".installed-plugins__group-action")?.click();
 
     await waitForFast(() => expect(fetchMock).toHaveBeenCalledTimes(12));
     expect(page.querySelectorAll(".installed-plugins-card")).toHaveLength(12);

@@ -83,7 +83,7 @@ describe("PluginsPage", () => {
   });
 
   it("surfaces an initial catalog load failure", async () => {
-    const { client } = createClient(async (method) => {
+    const { client, request } = createClient(async (method) => {
       if (method === "plugins.list") {
         throw new Error("catalog unavailable");
       }
@@ -99,7 +99,7 @@ describe("PluginsPage", () => {
       expect(page.querySelector('[role="alert"]')?.textContent).toContain("catalog unavailable"),
     );
     expect(page.textContent?.match(/catalog unavailable/gu)).toHaveLength(1);
-    expect(request).not.toHaveBeenCalled();
+    expect(request.mock.calls[0]?.slice(0, 2)).toEqual(["plugins.list", {}]);
   });
 
   it("refreshes the authoritative catalog after a same-client reconnect", async () => {
