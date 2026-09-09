@@ -77,6 +77,30 @@ function projectOptions(events: string[], controller = new AbortController()) {
 }
 
 describe("Crabbox project snapshot provisioning", () => {
+  it("recovers enrolled preparation facts without rerunning setup or capture", async () => {
+    const events: string[] = [];
+    const current = projectOptions(events);
+    const { provider, calls } = createWarmProvider(current.observe);
+    const inspected = vi.fn(async () => {});
+    const options: ProvisionOptions = {
+      ...current.options,
+      project: {
+        ...current.options.project,
+        preparation: { key: "c".repeat(64), cacheKey: "d".repeat(64) },
+        inspectPreparedWorkspace: inspected,
+      },
+    };
+    await provider.provision(PROFILE, "enrolled-project-replay", options);
+    const before = calls.length;
+    current.options.project.prepare.mockClear();
+    current.options.prepareNodeRuntime.mockClear();
+    await provider.provision(PROFILE, "enrolled-project-replay", options);
+    expect(inspected).toHaveBeenCalledOnce();
+    expect(current.options.project.prepare).not.toHaveBeenCalled();
+    expect(current.options.prepareNodeRuntime).not.toHaveBeenCalled();
+    expect(calls.slice(before).some(({ argv }) => argv[2] === "create")).toBe(false);
+  });
+
   it.each(["aws", "azure", "gcp"])(
     "settles a retained %s checkpoint before enrollment without repeating capture",
     async (backend) => {

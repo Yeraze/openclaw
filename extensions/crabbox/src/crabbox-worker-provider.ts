@@ -370,11 +370,30 @@ export function createCrabboxWorkerProvider(
           setup: createCrabboxWorkerDesktopSetup(leaseId, wallpaperBase64),
         });
       }
+      if (project?.preparation && warmImages.lookupLease(leaseId)?.phase === "enrolled") {
+        // An enrolled replay may have lost its response before core registration.
+        // Verify the preserved completion only; setup and capture remain closed.
+        try {
+          await prepareCrabboxProjectFiles({
+            ...context,
+            id: leaseId,
+            project,
+            inspectPrepared: true,
+            runArgs: leaseRunArgs({ ...context, id: leaseId }),
+            runCommand,
+            signal: preparationSignal,
+            timeoutMs: () => remainingProvisionTimeout(setupDeadline, CRABBOX_SETUP_TIMEOUT_MS),
+          });
+        } catch (error) {
+          preparationSignal?.throwIfAborted();
+          return await failProvisionAfterCleanup({ ...context, id: leaseId, stopLease }, error);
+        }
+      }
       if (project && warmImages.lookupLease(leaseId)?.phase !== "enrolled") {
         let preparationFailed = false;
         let captured: boolean;
         try {
-          await prepareCrabboxProjectFiles({
+          const preparedProject = await prepareCrabboxProjectFiles({
             ...context,
             id: leaseId,
             project,
@@ -392,6 +411,7 @@ export function createCrabboxWorkerProvider(
               profile: parsed,
               signal: preparationSignal,
               assertCurrent: project.assertCurrent,
+              projectCaptureRequired: preparedProject?.captureRequired,
               ...(allocationChoice.kind === "checkpoint"
                 ? { forkedCheckpointId: allocationChoice.checkpointId }
                 : {}),
@@ -574,6 +594,17 @@ export function createCrabboxWorkerProvider(
         machineClass ?? parsed.class,
         os === undefined ? parsed.target : parseCrabboxOperatingSystem(os),
       ).warmImage;
+    },
+    resolvePreparationTarget(profile, machineClass, os) {
+      const parsed = parseCrabboxProfile(profile);
+      const effective = resolveCrabboxWarmImageProfile(
+        parsed,
+        machineClass ?? parsed.class,
+        os === undefined ? parsed.target : parseCrabboxOperatingSystem(os),
+      );
+      return effective.warmImage && effective.class
+        ? { machineClass: effective.class, platform: effective.target }
+        : undefined;
     },
     resolveAllocation,
     resolveProvisionTimeoutMs(profile) {

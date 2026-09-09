@@ -423,7 +423,11 @@ export function createCrabboxWarmImageManager(dependencies: {
     },
 
     async capture(
-      context: LeaseContext & { profile: CrabboxProfile; forkedCheckpointId?: string },
+      context: LeaseContext & {
+        profile: CrabboxProfile;
+        forkedCheckpointId?: string;
+        projectCaptureRequired?: true;
+      },
       prepareSource?: () => Promise<void>,
     ): Promise<boolean> {
       assertCurrent(context);
@@ -467,7 +471,7 @@ export function createCrabboxWarmImageManager(dependencies: {
             // A different publication won after this allocation chose its source. An opaque
             // digest is not a newer-version claim; only that source's borrowers may refresh it.
             if (
-              !runtimeMatches &&
+              (!runtimeMatches || context.projectCaptureRequired) &&
               (owner.choice.kind !== "checkpoint" ||
                 owner.choice.checkpointId !== existing.image.checkpointId)
             ) {
@@ -489,6 +493,7 @@ export function createCrabboxWarmImageManager(dependencies: {
               state !== "missing" &&
               Date.now() - existing.image.createdAtMs < WARM_IMAGE_REFRESH_MS &&
               runtimeMatches &&
+              !context.projectCaptureRequired &&
               (!owner.projectKey || existing.image.baseCommit === owner.baseCommit)
             ) {
               return;
