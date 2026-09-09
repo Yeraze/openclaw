@@ -8,8 +8,8 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import * as imageGenerationRuntime from "../../image-generation/runtime.js";
 import * as mediaStore from "../../media/store.js";
 import { createOpenClawTools } from "../openclaw-tools.js";
-import * as imageGenerationExecution from "./image-generate-tool.execution.js";
 import { createImageGenerateTool } from "./image-generate-tool.js";
+import * as mediaGenerationToolProviders from "./media-generation-tool-providers.js";
 import * as pdfNativeProviders from "./pdf-native-providers.js";
 import {
   createPdfToolInfraStub,
@@ -113,7 +113,7 @@ describe.runIf(process.platform === "win32")("host-local media tool file URLs", 
         const releaseProviders = vi.fn(async () => {});
         // Keep provider discovery stubbed while the tool reads the real file URL.
         const acquiredProviders: Awaited<
-          ReturnType<typeof imageGenerationExecution.acquireImageGenerationToolProviders>
+          ReturnType<typeof mediaGenerationToolProviders.acquireImageGenerationToolProviders>
         > = {
           providers: [
             {
@@ -139,7 +139,7 @@ describe.runIf(process.platform === "win32")("host-local media tool file URLs", 
           release: releaseProviders,
         };
         const acquireProviders = vi
-          .spyOn(imageGenerationExecution, "acquireImageGenerationToolProviders")
+          .spyOn(mediaGenerationToolProviders, "acquireImageGenerationToolProviders")
           .mockResolvedValue(acquiredProviders);
         const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
           provider: "fixture",
