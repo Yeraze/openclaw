@@ -48,9 +48,8 @@ type TestPluginsPage = HTMLElement & {
   busy: Record<string, boolean>;
   messages: Record<string, PluginRowMessage>;
   applyMutationResult: (result: PluginMutationResult) => void;
-  consentController: Pick<PluginsConsentController, "install">;
+  consentController: Pick<PluginsConsentController, "install" | "updateEnabled">;
   refreshCatalog: () => Promise<void>;
-  updateEnabled: (pluginId: string, enabled: boolean, key?: string) => Promise<void>;
   uninstall: (pluginId: string, rowKey: string) => Promise<void>;
 };
 
@@ -361,7 +360,7 @@ export async function activatePluginControl(
     if (!plugin) {
       throw new Error(`No plugin control matching ${label} under ${pluginSelector}`);
     }
-    void page.updateEnabled(plugin.id, !plugin.enabled);
+    void page.consentController.updateEnabled(plugin.id, !plugin.enabled);
     await page.updateComplete;
     return;
   }

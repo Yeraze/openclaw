@@ -76,7 +76,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         .locator(`[data-plugin-id="${matrixDiscoveryPlugin.id}"]`)
         .first();
       expect(await availableCard.getByRole("button", { name: /Install/iu }).count()).toBe(1);
-      expect(await availableCard.textContent()).toContain("downloads");
+      expect(await availableCard.getByText(/downloads/u).count()).toBe(0);
       await captureScreenshot(page, "9-unified-plugin-catalog-desktop.png");
 
       await search.fill("matrix");
@@ -113,12 +113,24 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
         await page.getByText("Connect OpenClaw to Matrix rooms and direct messages.").count(),
       ).toBe(1);
       const detailTabs = page.locator("wa-tab-group.plugin-catalog-detail__tabs");
+      const detailMain = page.locator(".plugin-catalog-detail__hero main");
+      const detailSidebar = page.locator(".plugin-catalog-detail__sidebar");
       expect(await detailTabs.getByRole("tab", { name: "README" }).count()).toBe(1);
       expect(await detailTabs.getByRole("tab", { name: "Skills" }).count()).toBe(1);
       expect(await detailTabs.getByRole("tab", { name: "Configuration" }).count()).toBe(1);
       expect(await detailTabs.getByRole("tab", { name: "Compatibility" }).count()).toBe(1);
       expect(await detailTabs.getByRole("tab", { name: "Versions" }).count()).toBe(1);
       expect(await detailTabs.getByRole("tab", { name: "Advanced" }).count()).toBe(1);
+      const [mainBox, tabsBox, sidebarBox] = await Promise.all([
+        detailMain.boundingBox(),
+        detailTabs.boundingBox(),
+        detailSidebar.boundingBox(),
+      ]);
+      expect(mainBox).not.toBeNull();
+      expect(tabsBox).not.toBeNull();
+      expect(sidebarBox).not.toBeNull();
+      expect(tabsBox!.x + tabsBox!.width).toBeLessThanOrEqual(sidebarBox!.x);
+      expect(tabsBox!.y - (mainBox!.y + mainBox!.height)).toBeLessThanOrEqual(24);
       expect(await page.getByText("52.2k", { exact: true }).count()).toBe(1);
       expect(await page.getByText("Pass", { exact: true }).count()).toBe(1);
       expect(await page.getByText("Type", { exact: true }).count()).toBe(0);
@@ -432,7 +444,7 @@ describeControlUiE2e("Control UI Plugins mocked Gateway E2E", () => {
       await matrixCard.waitFor();
       expect(await matrixCard.getByText("@openclaw", { exact: true }).count()).toBe(1);
       expect(await matrixCard.getByLabel("Official", { exact: true }).count()).toBe(1);
-      expect(await matrixCard.getByText("52.2k downloads", { exact: true }).count()).toBe(1);
+      expect(await matrixCard.getByText(/downloads/u).count()).toBe(0);
       expect(await matrixCard.getByRole("button", { name: "Install Matrix" }).count()).toBe(1);
 
       let requestCount = (await gateway.getRequests("plugins.catalog.browse")).length;
