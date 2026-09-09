@@ -415,3 +415,5 @@ Example truncate response (`--max-lines 200`):
 - [Session management](/concepts/session)
 - [Compaction](/concepts/compaction)
 - [CLI reference](/cli)
+- [`openclaw resume`](/cli/resume) — reopen a previous session
+- [Cloud Workers](/gateway/cloud-workers) — sessions hosted on remote workers

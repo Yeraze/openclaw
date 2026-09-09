@@ -214,6 +214,7 @@ existing token's role and scopes before any local-backend pairing exception.
 
 ### Worker role and closed protocol
 
+Workers are started and inspected with [`openclaw worker`](/cli/worker).
 Workers use a closed protocol through either the public
 `/__openclaw__/worker` WebSocket path on the main TLS endpoint or the dedicated
 loopback ingress reached through the gateway-owned, host-key-pinned SSH tunnel.

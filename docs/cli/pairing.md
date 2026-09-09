@@ -71,3 +71,4 @@ If you approved a sender before the first-owner bootstrap shipped in 2026.4.29, 
 
 - [CLI reference](/cli)
 - [Channel pairing](/channels/pairing)
+- [`openclaw qr`](/cli/qr) — render a pairing code as a QR image

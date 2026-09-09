@@ -84,6 +84,11 @@ Every section heading from the previous single-page version keeps its anchor her
 
 ## Related
 
-- [Building a Gateway client](https://docs.openclaw.ai/gateway/clients)
-- [Embedding OpenClaw](https://docs.openclaw.ai/gateway/embedding)
+- [Building a Gateway client](/gateway/clients)
+- [Embedding OpenClaw](/gateway/embedding)
 - [Gateway runbook](/gateway)
+- [Operator scopes](/gateway/operator-scopes) — the scopes protocol methods are authorized against
+- [Audit history](/gateway/audit) — the ledger the audit RPCs read
+- [Pairing](/channels/pairing) — how a client is paired before it can call the protocol
+- [Cloud Workers](/gateway/cloud-workers) — worker sessions driven over this protocol
+- [Tools invoke API](/gateway/tools-invoke-http-api) — the HTTP endpoint that mirrors tool invocation

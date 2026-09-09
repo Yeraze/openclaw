@@ -51,6 +51,11 @@ Expose and operate:
 - [Rate limiting](/gateway/security/rate-limiting) - Every Gateway rate limit: lockouts, throttles, caps, and cooldowns.
 - [Operator incident response](/gateway/security/operator-incident-response) - Contain, rotate, audit, and collect evidence after a suspected compromise.
 
+Run it from the CLI:
+
+- [`openclaw security`](/cli/security) - Run the audit, read findings, and apply the supported auto-fixes.
+- [`openclaw policy`](/cli/policy) - Inspect and test the tool policy the guidance above configures.
+
 ## Where each section moved
 
 Every anchor this page used to publish still resolves here. Each entry below carries the original anchor and links to its new home.

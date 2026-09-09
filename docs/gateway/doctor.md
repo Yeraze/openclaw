@@ -96,3 +96,5 @@ still resolves. Each entry points at the page that now holds the content.
 
 - [Gateway runbook](/gateway)
 - [Gateway troubleshooting](/gateway/troubleshooting)
+- [`openclaw status`](/cli/status) — local diagnosis and channel probes
+- [Configuration reference](/gateway/configuration-reference) — every setting doctor validates

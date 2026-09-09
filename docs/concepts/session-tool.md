@@ -244,3 +244,4 @@ and prompt hints; they do not grant access.
 
 - [Session management](/concepts/session)
 - [Session pruning](/concepts/session-pruning)
+- [Goal](/tools/goal) — the session goal these tools read and update

@@ -129,3 +129,4 @@ Non-goals for v1:
 
 - [Control UI](/web/control-ui)
 - [WebChat](/web/webchat)
+- [`openclaw dashboard`](/cli/dashboard) — open the dashboard from the CLI

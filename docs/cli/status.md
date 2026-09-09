@@ -159,3 +159,4 @@ their own files, chunks, vector, and FTS state.
 
 - [CLI reference](/cli)
 - [Doctor](/gateway/doctor)
+- [`openclaw health`](/cli/health) — full health snapshot across channels and nodes

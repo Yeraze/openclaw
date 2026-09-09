@@ -138,3 +138,4 @@ the page that now holds the content.
 - [Connect MCP servers](/tools/mcp)
 - [CLI reference](/cli)
 - [Plugins](/cli/plugins)
+- [`openclaw attach`](/cli/attach) — attach a terminal to a running session

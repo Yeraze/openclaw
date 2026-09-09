@@ -158,3 +158,6 @@ the page that now holds the content.
 - [Sandboxing](/gateway/sandboxing) — reducing blast radius for local tool execution
 - [Sessions CLI](/cli/sessions) — inspecting stored sessions
 - [Configuration reference](/gateway/configuration-reference)
+- [`openclaw worker`](/cli/worker) — run and inspect a worker from the CLI
+- [Gateway RPC reference](/reference/rpc) — full shape of the worker RPC methods named above
+- [Operator scopes](/gateway/operator-scopes) — the scopes these worker calls are authorized against

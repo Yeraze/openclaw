@@ -416,3 +416,4 @@ Marker persistence is source-authoritative: OpenClaw writes markers from the act
 - [Models CLI reference](/cli/models) — full command and flag reference
 - [Music generation](/tools/music-generation) — music model configuration
 - [Video generation](/tools/video-generation) — video model configuration
+- [`openclaw infer`](/cli/infer) — run a one-shot inference against a selected model

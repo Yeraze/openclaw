@@ -236,3 +236,4 @@ If approval keeps failing, run `openclaw devices list` first to confirm a pendin
 
 - [CLI reference](/cli)
 - [Nodes](/nodes)
+- [`openclaw qr`](/cli/qr) — render a pairing code as a QR image

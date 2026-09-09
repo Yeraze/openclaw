@@ -320,3 +320,6 @@ Notes:
 - [Sandboxing](/gateway/sandboxing) — running commands in sandboxed environments
 - [Background Process](/gateway/background-process) — long-running exec and process tool
 - [Security](/gateway/security) — tool policy and elevated access
+- [Code Mode](/tools/code-mode) — running tool calls as code instead of one exec at a time
+- [`apply_patch`](/tools/apply-patch) — apply a structured edit instead of shelling out
+- [Tokenjuice](/tools/tokenjuice) — compacting large command output

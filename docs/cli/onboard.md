@@ -466,3 +466,8 @@ openclaw channels add
 openclaw configure
 openclaw agents add <name>
 ```
+
+## Related
+
+- [CLI reference](/cli)
+- [`openclaw setup`](/cli/setup) — the non-interactive setup command
