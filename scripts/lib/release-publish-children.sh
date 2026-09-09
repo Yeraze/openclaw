@@ -10,17 +10,8 @@ record_postpublish_diagnostics() {
     CHILD_PLUGIN_CLAWHUB_RUN_ID="${plugin_clawhub_run_id:-${CHILD_PLUGIN_CLAWHUB_RUN_ID:-}}" \
     CHILD_PLUGIN_CLAWHUB_BOOTSTRAP_RUN_ID="${plugin_clawhub_bootstrap_run_id:-${CHILD_PLUGIN_CLAWHUB_BOOTSTRAP_RUN_ID:-}}" \
     CHILD_OPENCLAW_NPM_RUN_ID="${openclaw_npm_run_id:-${CHILD_OPENCLAW_NPM_RUN_ID:-}}" \
-    node --import tsx --input-type=module - "$1" <<'NODE' || echo "Warning: postpublish diagnostics unavailable; primary result unchanged." >&2
-import { pathToFileURL } from "node:url";
-try {
-  const { recordReleasePublishDiagnostics } = await import(pathToFileURL(
-    `${process.env.GITHUB_WORKSPACE}/.release-harness/scripts/lib/release-beta-verifier.ts`,
-  ).href);
-  recordReleasePublishDiagnostics(process.argv[2]);
-} catch {
-  console.error("Warning: postpublish diagnostics unavailable; primary result unchanged.");
-}
-NODE
+    node --import tsx "${GITHUB_WORKSPACE}/.release-harness/scripts/lib/release-beta-verifier.ts" "$1" \
+    || echo "Warning: postpublish diagnostics unavailable; primary result unchanged." >&2
 }
 
 is_stable_release() {

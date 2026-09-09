@@ -304,9 +304,10 @@ function createReleasePublishFixture(
   mkdirSync(helperDir, { recursive: true });
   writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module" }));
   symlinkSync(resolve("node_modules"), join(root, "node_modules"), "dir");
-  writeFileSync(
+  symlinkSync(
+    resolve("scripts/lib/release-beta-verifier.ts"),
     join(helperDir, "release-beta-verifier.ts"),
-    `export * from ${JSON.stringify(pathToFileURL(resolve("scripts/lib/release-beta-verifier.ts")).href)};\n`,
+    "file",
   );
   writeFileSync(eventsPath, "");
   writeFileSync(outputPath, "");
@@ -3889,6 +3890,13 @@ if (args[0] === "view") {
   it("retains cancelled or skipped verification without authorizing recovery", () => {
     const fixture = createReleasePublishFixture();
     const job = workflowJob(RELEASE_PUBLISH_WORKFLOW, "publish");
+    const diagnosticPath = join(fixture.root, "evidence/release-postpublish-diagnostics.json");
+    const imported = fixture.run({
+      run: `node --import tsx --input-type=module -e 'await import("./.release-harness/scripts/lib/release-beta-verifier.ts")' diagnostic-import initialize`,
+    });
+    expect(imported.status, imported.stderr).toBe(0);
+    expect(imported.stderr).toBe("");
+    expect(existsSync(diagnosticPath)).toBe(false);
     const initialized = fixture.run(workflowStep(job, "Initialize postpublish diagnostics"));
     expect(initialized.status, initialized.stderr).toBe(0);
     const terminal = fixture.run(workflowStep(job, "Record postpublish outcome"), {
@@ -3897,9 +3905,7 @@ if (args[0] === "view") {
       PUBLISH_JOB_STATUS: "cancelled",
     });
     expect(terminal.status, terminal.stderr).toBe(0);
-    const diagnostic = JSON.parse(
-      readFileSync(join(fixture.root, "evidence/release-postpublish-diagnostics.json"), "utf8"),
-    );
+    const diagnostic = JSON.parse(readFileSync(diagnosticPath, "utf8"));
     expect(diagnostic.verification).toBe("unattempted");
     expect(diagnostic.jobOutcomeBeforeArtifactUploads).toBe("cancelled");
     expect(fixture.events()).toEqual([""]);

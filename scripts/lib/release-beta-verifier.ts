@@ -589,7 +589,7 @@ class PostpublishDiagnostics {
 
 // Called only by the existing publish helper. This records local observations;
 // it cannot invoke a registry, GitHub mutation, retry, or publication command.
-export function recordReleasePublishDiagnostics(event: string): void {
+function recordReleasePublishDiagnostics(event: string): void {
   try {
     const env = process.env;
     if (!env.POSTPUBLISH_EVIDENCE_DIR) {
@@ -2132,4 +2132,8 @@ export async function verifyBetaRelease(
     diagnostic.fail(error);
     throw error;
   }
+}
+
+if (import.meta.main) {
+  recordReleasePublishDiagnostics(process.argv[2] ?? "");
 }
