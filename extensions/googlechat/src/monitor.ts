@@ -415,8 +415,12 @@ async function processGoogleChatEvent(
                 threadId,
               };
             },
-            deliver: async (payload) => {
-              if (draftStream) {
+            deliver: async (payload, info) => {
+              // Intermediate deliveries (tool/block payloads) must not consume the
+              // placeholder or draft stream — those belong to the final collapse.
+              // Deliver them and leave live progress running.
+              const usesTypingMessage = info.kind === "final";
+              if (usesTypingMessage && draftStream) {
                 // Stop live progress edits and drain the last in-flight one before
                 // the final collapse, so a late edit cannot clobber the answer. The
                 // draft stream shares the placeholder message, so hand delivery its
@@ -435,7 +439,7 @@ async function processGoogleChatEvent(
               });
               // Clear this whenever the typing message is deleted or unavailable; otherwise
               // text delivery can keep retrying a dead message and drop content.
-              let deliveryTypingMessage = typingMessage;
+              let deliveryTypingMessage = usesTypingMessage ? typingMessage : undefined;
               const targetThreadName = normalizedPayload.replyToId?.trim() || undefined;
               const reply = resolveSendableOutboundReplyParts(normalizedPayload);
               let deliveryThreadName = targetThreadName;
@@ -590,6 +594,12 @@ async function processGoogleChatEvent(
           ...(draftStream
             ? {
                 replyOptions: {
+                  // Keep core's own standalone tool-progress text messages off (we
+                  // render progress into the live placeholder), but still let the
+                  // tool lifecycle fire on non-verbose turns so onToolStart/
+                  // onItemEvent reach the draft stream instead of freezing.
+                  suppressDefaultToolProgressMessages: true,
+                  allowToolLifecycleWhenProgressHidden: true,
                   onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
                   onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
                   onReasoningStream: (payload) =>
@@ -608,6 +618,20 @@ async function processGoogleChatEvent(
       },
     });
   } finally {
+    // A turn can settle without deliver ever running (silent finish, failure, or
+    // a reply sent only via a message tool). Stop any still-live draft stream so
+    // its delayed-start timer / pending flush cannot PATCH a stale status after
+    // the turn is done, or re-send a placeholder that cleanup just deleted. The
+    // final delivery clears draftStream itself, so a promoted visible answer is
+    // never clobbered here.
+    if (draftStream) {
+      try {
+        await draftStream.stop();
+      } catch (err) {
+        runtime.error?.(`googlechat: failed stopping draft stream at settlement: ${String(err)}`);
+      }
+      draftStream = undefined;
+    }
     if (!deferred) {
       await cleanupTypingMessage();
     }
