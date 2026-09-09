@@ -228,7 +228,8 @@ suite.define(() => {
           await page.getByRole("tab", { name: "Plugins", exact: true }).getAttribute("active"),
         ).not.toBeNull();
         expect(await page.getByRole("tab", { name: /Installed|Discover/u }).count()).toBe(0);
-        expect(await page.locator(".plugins-tabs.oc-segmented").count()).toBe(1);
+        expect(await page.locator(".plugins-tabs").count()).toBe(1);
+        expect(await page.locator(".plugins-tabs.oc-segmented").count()).toBe(0);
         const tabBox = await page.locator(".plugins-tabs").boundingBox();
         const pluginTabBox = await page
           .getByRole("tab", { name: "Plugins", exact: true })

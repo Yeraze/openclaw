@@ -28,28 +28,6 @@
   grid-area: actions;
 }
 
-.plugins-tabs.oc-segmented {
-  width: max-content;
-  max-width: 100%;
-  align-self: start;
-  gap: 0;
-  padding: 0;
-  border-color: var(--border);
-  background: transparent;
-  --track-color: transparent;
-  --indicator-color: transparent;
-}
-
-.plugins-tabs.oc-segmented wa-tab.hub-tab {
-  min-height: 0;
-  padding: 0;
-}
-
-.plugins-tabs.oc-segmented wa-tab.hub-tab::part(base) {
-  min-height: 26px;
-  padding: 2px 7px;
-}
-
 .plugins-hub-header + .settings-workspace {
   /* The settings page already contributes the lower half of the tab rhythm. */
   margin-top: 0;
