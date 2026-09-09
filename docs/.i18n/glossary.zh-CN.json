@@ -3230,5 +3230,49 @@
   {
     "source": "How an update runs",
     "target": "更新的运行方式"
+  },
+  {
+    "source": "Configuration — shared channel policies",
+    "target": "配置 — 共享渠道策略"
+  },
+  {
+    "source": "Configuration — personal messaging channels",
+    "target": "配置 — 个人消息渠道"
+  },
+  {
+    "source": "Configuration — workplace chat channels",
+    "target": "配置 — 办公聊天渠道"
+  },
+  {
+    "source": "Configuration — community chat channels",
+    "target": "配置 — 社区聊天渠道"
+  },
+  {
+    "source": "Configuration — group mention gating and history",
+    "target": "配置 — 群组提及门控和历史记录"
+  },
+  {
+    "source": "Configuration — chat commands",
+    "target": "配置 — 聊天命令"
+  },
+  {
+    "source": "Set up OpenTelemetry export",
+    "target": "设置 OpenTelemetry 导出"
+  },
+  {
+    "source": "OpenTelemetry configuration",
+    "target": "OpenTelemetry 配置"
+  },
+  {
+    "source": "Privacy and trace context",
+    "target": "隐私和追踪上下文"
+  },
+  {
+    "source": "Model calls and exported metrics",
+    "target": "模型调用和导出指标"
+  },
+  {
+    "source": "Exported spans and diagnostic events",
+    "target": "导出的 Span 和诊断事件"
   }
 ]
