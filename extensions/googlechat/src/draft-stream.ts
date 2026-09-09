@@ -27,6 +27,8 @@ export type GoogleChatDraftStream = {
   >["pushReasoningProgress"];
   /** The message name currently edited; may change after a 404 re-send. */
   messageName: () => string;
+  /** The thread the message now lives in; may change after a 404 re-send. */
+  deliveredThreadName: () => string | undefined;
   /**
    * Stop progress edits, flush the last in-flight one, then PATCH the message to
    * the final reply text. Stopping before the final PATCH keeps a late progress
@@ -48,6 +50,9 @@ export function createGoogleChatDraftStream(params: {
 }): GoogleChatDraftStream {
   const { account, spaceId, threadName, runtime } = params;
   let messageName = params.messageName.trim();
+  // Tracks the thread a 404 re-send landed in, so final delivery can follow the
+  // replacement thread instead of the original placeholder's.
+  let deliveredThreadName = threadName;
   let stopped = false;
 
   // Edit the placeholder in place. A 404 means the message was deleted out from
@@ -75,6 +80,7 @@ export function createGoogleChatDraftStream(params: {
         });
         if (sent?.messageName) {
           messageName = sent.messageName;
+          deliveredThreadName = sent.threadName ?? deliveredThreadName;
           return true;
         }
       } catch (resendError) {
@@ -132,6 +138,7 @@ export function createGoogleChatDraftStream(params: {
     pushItemEvent: (...args) => compositor.pushItemEvent(...args),
     pushReasoningProgress: (...args) => compositor.pushReasoningProgress(...args),
     messageName: () => messageName,
+    deliveredThreadName: () => deliveredThreadName,
     finalize,
     stop,
   };
