@@ -32,6 +32,32 @@ export type CacheExchange = {
   usage: CacheUsage;
 };
 
+export class CacheProofStopError extends Error {
+  constructor(
+    readonly phase: "deadline" | "request-ceiling" | "capture-read" | "transport-observation",
+    message: string,
+  ) {
+    super(message);
+    this.name = "CacheProofStopError";
+  }
+}
+
+export async function runWithCacheProofStop(
+  state: { first?: CacheProofStopError },
+  run: () => Promise<void>,
+) {
+  try {
+    await run();
+  } catch (error) {
+    if (error instanceof CacheProofStopError) {
+      state.first ??= error;
+    }
+    // Emergency shutdown can close an in-flight Gateway call. Preserve
+    // the first stop cause instead of replacing it with that cleanup symptom.
+    throw state.first ?? error;
+  }
+}
+
 function requireRecord(value: unknown, label: string): JsonRecord {
   if (!isRecord(value)) {
     throw new Error(`${label} is missing or is not an object.`);
@@ -192,12 +218,21 @@ function captureBody(event: JsonRecord, reader: DebugProxyCaptureReader): string
   if (meta.bodyCapture !== undefined) {
     throw new Error("Provider capture body was unavailable, oversized, or stalled.");
   }
-  const body =
-    typeof event.dataText === "string"
-      ? event.dataText
-      : typeof event.dataBlobId === "string"
-        ? reader.readBlob(event.dataBlobId)
-        : null;
+  let body: string | null;
+  // The store keeps only an 8 KiB preview inline. A referenced full blob is
+  // authoritative; falling back would hide missing capture or truncate valid SSE.
+  if (event.dataBlobId !== undefined && event.dataBlobId !== null) {
+    if (typeof event.dataBlobId !== "string" || !event.dataBlobId) {
+      throw new Error("Provider capture blob reference is invalid.");
+    }
+    try {
+      body = reader.readBlob(event.dataBlobId);
+    } catch {
+      throw new Error("Provider capture blob could not be read.");
+    }
+  } else {
+    body = typeof event.dataText === "string" ? event.dataText : null;
+  }
   if (!body || Buffer.byteLength(body) > CACHE_CAPTURE_BODY_LIMIT) {
     throw new Error("Provider capture body is missing or exceeds the proof bound.");
   }
@@ -205,13 +240,24 @@ function captureBody(event: JsonRecord, reader: DebugProxyCaptureReader): string
 }
 
 export function readCacheCaptureRows(reader: DebugProxyCaptureReader, sessionId: string) {
-  const rows = reader.getSessionEvents(sessionId, CACHE_CAPTURE_EVENT_LIMIT);
+  let rows: JsonRecord[];
+  try {
+    rows = reader.getSessionEvents(sessionId, CACHE_CAPTURE_EVENT_LIMIT);
+  } catch {
+    throw new CacheProofStopError("capture-read", "Runtime cache capture could not be read.");
+  }
   if (rows.length >= CACHE_CAPTURE_EVENT_LIMIT) {
-    throw new Error("Capture event limit reached; complete request accounting is unavailable.");
+    throw new CacheProofStopError(
+      "capture-read",
+      "Capture event limit reached; complete request accounting is unavailable.",
+    );
   }
   const providerRows = rows.filter((row) => providerApi(row) !== undefined);
   if (providerRows.some((row) => row.kind === "error" || row.kind === "retry-link")) {
-    throw new Error("Provider transport error or retry was captured.");
+    throw new CacheProofStopError(
+      "transport-observation",
+      "Provider transport error or retry was captured.",
+    );
   }
   return providerRows.toSorted(
     (left, right) => Number(left.ts) - Number(right.ts) || Number(left.id) - Number(right.id),

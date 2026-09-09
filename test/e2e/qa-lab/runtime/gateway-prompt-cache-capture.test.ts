@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -6,14 +7,25 @@ import {
   INTERNAL_RUNTIME_CONTEXT_BEGIN,
   INTERNAL_RUNTIME_CONTEXT_END,
 } from "../../../../src/agents/internal-runtime-context.js";
+import {
+  createDebugProxyCaptureReader,
+  type DebugProxyCaptureReader,
+} from "../../../../src/proxy-capture/store-readonly.js";
+import {
+  DebugProxyCaptureStore,
+  persistEventPayload,
+} from "../../../../src/proxy-capture/store.sqlite.js";
+import { closeOpenClawStateDatabaseByPath } from "../../../../src/state/openclaw-state-db.js";
 import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 import {
   cacheRequestsComplete,
+  CacheProofStopError,
   collectCacheFailureEvidence,
   decodeCacheExchanges,
   decodeCacheResponse,
   readCacheCaptureRows,
   reconcileCacheUsage,
+  runWithCacheProofStop,
   verifyCacheConversation,
   verifyDependentReadHistory,
   waitForCacheExchanges,
@@ -232,19 +244,35 @@ describe("raw cache stream evidence", () => {
       await expect(decodeCacheExchanges(invalid, reader, openai)).rejects.toThrow();
     }
   });
-  it("fails capture overflow and transport retry records", () => {
-    expect(() =>
-      readCacheCaptureRows({ ...reader, getSessionEvents: () => Array(512).fill({}) }, "capture"),
-    ).toThrow("limit");
-    expect(() =>
-      readCacheCaptureRows(
-        {
-          ...reader,
-          getSessionEvents: () => [{ kind: "retry-link", path: "/v1/messages" }],
-        },
-        "capture",
-      ),
-    ).toThrow("retry");
+  it.each([
+    { kind: "error", phase: "transport-observation" },
+    { kind: "retry-link", phase: "transport-observation" },
+    { kind: "overflow", phase: "capture-read" },
+    { kind: "storage", phase: "capture-read" },
+  ])("classifies $kind without relabeling it as a budget stop", ({ kind, phase }) => {
+    const failure = (() => {
+      try {
+        readCacheCaptureRows(
+          {
+            ...reader,
+            getSessionEvents: () => {
+              if (kind === "storage") {
+                throw new Error("private storage detail");
+              }
+              return kind === "overflow"
+                ? Array(512).fill({})
+                : [{ kind, path: "/v1/messages", errorText: "private transport detail" }];
+            },
+          },
+          "capture",
+        );
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(failure).toBeInstanceOf(CacheProofStopError);
+    expect(failure).toMatchObject({ phase });
+    expect(String(failure)).not.toContain("private");
   });
   it("waits for the complete expected phase, not an earlier complete prefix", async () => {
     const pair = (flowId: string) => [
@@ -284,6 +312,161 @@ describe("raw cache stream evidence", () => {
       waitForCacheExchanges(() => [...first, ...second], reader, openai, 1),
     ).rejects.toThrow("Unexpected");
   });
+});
+
+describe("cache first-stop evidence", () => {
+  it("records and rethrows a foreground capture failure before the monitor observes it", async () => {
+    const state: { first?: CacheProofStopError } = {};
+    const captureFailure = new CacheProofStopError("capture-read", "Capture read failed.");
+    await expect(
+      runWithCacheProofStop(state, async () => {
+        throw captureFailure;
+      }),
+    ).rejects.toBe(captureFailure);
+    expect(state.first).toBe(captureFailure);
+  });
+
+  it.each(["lifecycle", "capture"] as const)(
+    "retains an earlier monitor failure instead of a later %s error",
+    async (kind) => {
+      const first = new CacheProofStopError("transport-observation", "Transport failure observed.");
+      const state = { first };
+      await expect(
+        runWithCacheProofStop(state, async () => {
+          throw kind === "lifecycle"
+            ? new Error("qa gateway child lifecycle is closed")
+            : new CacheProofStopError("capture-read", "Later capture failure.");
+        }),
+      ).rejects.toBe(first);
+      expect(state.first).toBe(first);
+    },
+  );
+
+  it("preserves the original decode error without inventing a stop reason", async () => {
+    const state: { first?: CacheProofStopError } = {};
+    const decodeFailure = new Error("Provider request is not a complete JSON object.");
+    await expect(
+      runWithCacheProofStop(state, async () => {
+        throw decodeFailure;
+      }),
+    ).rejects.toBe(decodeFailure);
+    expect(state.first).toBeUndefined();
+  });
+});
+
+describe("persisted cache body boundary", () => {
+  const request = JSON.stringify({ model: sonnet.id, stream: true });
+  const response = anthropicStream();
+  async function withStoredExchange(
+    options: { request?: string; response?: string; inline?: boolean },
+    check: (capture: {
+      rows: Array<Record<string, unknown>>;
+      reader: DebugProxyCaptureReader;
+      store: DebugProxyCaptureStore;
+    }) => Promise<void>,
+  ) {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-body-test-"));
+    const env = { OPENCLAW_STATE_DIR: root };
+    const store = new DebugProxyCaptureStore({ env });
+    try {
+      for (const [index, kind] of (["request", "response"] as const).entries()) {
+        const data =
+          kind === "request" ? (options.request ?? request) : (options.response ?? response);
+        const contentType = kind === "request" ? "application/json" : "text/event-stream";
+        store.recordEvent({
+          sessionId: "body-boundary",
+          ts: index,
+          sourceScope: "openclaw",
+          sourceProcess: "test",
+          protocol: "http",
+          direction: kind === "request" ? "outbound" : "inbound",
+          kind,
+          flowId: "body-flow",
+          method: "POST",
+          host: "api.anthropic.com",
+          path: "/v1/messages",
+          ...(kind === "response" ? { status: 200 } : {}),
+          contentType,
+          ...(options.inline
+            ? { dataText: data }
+            : persistEventPayload(store, { data, contentType })),
+        });
+      }
+      const reader = createDebugProxyCaptureReader({ env });
+      await check({ rows: readCacheCaptureRows(reader, "body-boundary"), reader, store });
+    } finally {
+      store.close();
+      closeOpenClawStateDatabaseByPath(store.dbPath);
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
+
+  it.each(["request", "response"] as const)(
+    "decodes the complete persisted %s beyond the 8 KiB preview",
+    async (kind) => {
+      const body =
+        kind === "request"
+          ? JSON.stringify({
+              model: sonnet.id,
+              stream: true,
+              messages: [{ role: "user", content: "x".repeat(9000) }],
+            })
+          : sse("content_block_delta", { delta: { type: "text_delta", text: "x".repeat(9000) } }) +
+            response;
+      await withStoredExchange({ [kind]: body }, async ({ rows, reader }) => {
+        const row = rows.find((row) => row.kind === kind)!;
+        expect(Buffer.byteLength(String(row.dataText))).toBe(8192);
+        expect(typeof row.dataBlobId).toBe("string");
+        const [decoded] = await decodeCacheExchanges(rows, reader, sonnet);
+        expect(decoded?.[kind === "request" ? "requestHash" : "responseHash"]).toBe(
+          createHash("sha256").update(body).digest("hex"),
+        );
+        expect(decoded?.usage).toEqual({
+          input: 10,
+          output: 6,
+          cacheRead: 100,
+          cacheWrite: 200,
+          totalInput: 310,
+        });
+      });
+    },
+  );
+
+  it("accepts complete inline bodies only when no blob is referenced", async () => {
+    await withStoredExchange({ inline: true }, async ({ rows, reader }) => {
+      expect(rows.every((row) => row.dataBlobId === null)).toBe(true);
+      expect(await decodeCacheExchanges(rows, reader, sonnet)).toHaveLength(1);
+    });
+  });
+
+  it.each(["missing", "unreadable", "empty", "oversized"] as const)(
+    "rejects a %s full blob despite a valid inline preview",
+    async (kind) => {
+      await withStoredExchange({}, async ({ rows, reader, store }) => {
+        const requestRow = rows.find((row) => row.kind === "request")!;
+        expect(requestRow.dataText).toBe(request);
+        if (kind === "missing") {
+          store.purgeAll();
+        } else if (kind === "unreadable") {
+          reader = {
+            ...reader,
+            readBlob() {
+              throw new Error("private storage detail");
+            },
+          };
+        } else {
+          requestRow.dataBlobId = persistEventPayload(store, {
+            data: kind === "empty" ? "" : "x".repeat(2 * 1024 * 1024 + 1),
+          }).dataBlobId;
+        }
+        await expect(decodeCacheExchanges(rows, reader, sonnet)).rejects.toThrow(
+          kind === "unreadable"
+            ? "Provider capture blob could not be read."
+            : "Provider capture body is missing or exceeds the proof bound.",
+        );
+      });
+    },
+  );
 });
 
 describe("cache history and lifecycle proof", () => {
