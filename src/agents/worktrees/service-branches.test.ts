@@ -147,4 +147,67 @@ describe("ManagedWorktreeService branch discovery", () => {
       headBranch: "main",
     });
   });
+
+  it.each(["local", "current", "default", "remote"] as const)(
+    "keeps ambiguous %s branch suggestions usable even when Git warnings are disabled",
+    async (selection) => {
+      const initial = await execFileAsync("git", ["-C", repo, "rev-parse", "HEAD"]);
+      const branchCommit = await execFileAsync("git", [
+        "-C",
+        repo,
+        "commit-tree",
+        "HEAD^{tree}",
+        "-p",
+        initial.stdout.trim(),
+        "-m",
+        "branch target",
+      ]);
+      const commit = branchCommit.stdout.trim();
+      const remote = selection === "remote";
+      const ref = remote ? "refs/remotes/origin/z-selected" : "refs/heads/z-selected";
+      await git(repo, "config", "core.warnAmbiguousRefs", "false");
+      await git(repo, "tag", remote ? "origin/z-selected" : "z-selected");
+      await git(repo, "update-ref", ref, commit);
+      if (selection !== "local") {
+        const fillers = ["refs/heads", "refs/remotes/origin"].flatMap((prefix) =>
+          Array.from(
+            { length: 150 },
+            (_, index) =>
+              `${initial.stdout.trim()} ${prefix}/filler-${String(index).padStart(3, "0")}`,
+          ),
+        );
+        await fs.writeFile(path.join(repo, ".git", "packed-refs"), `${fillers.join("\n")}\n`);
+      }
+      if (selection === "current") {
+        await git(repo, "symbolic-ref", "HEAD", ref);
+      }
+      if (selection === "default" || remote) {
+        await git(repo, "update-ref", "refs/remotes/origin/z-selected", commit);
+        await git(
+          repo,
+          "symbolic-ref",
+          "refs/remotes/origin/HEAD",
+          "refs/remotes/origin/z-selected",
+        );
+      }
+
+      const result = await service.listRepositoryBranches(repo, { includeRepositoryStatus: true });
+      const expected = remote ? "remotes/origin/z-selected" : "heads/z-selected";
+      expect(result.branches).toContainEqual({ name: expected, kind: remote ? "remote" : "local" });
+      expect(result.branches.length).toBeLessThanOrEqual(202);
+      if (selection === "current") {
+        expect(result.headBranch).toBe(expected);
+      }
+      if (selection === "default" || remote) {
+        expect(result.defaultBranch).toBe(expected);
+      }
+      const created = await service.create({
+        repoRoot: repo,
+        name: "disambiguated",
+        baseRef: expected,
+      });
+      const head = await execFileAsync("git", ["-C", created.path, "rev-parse", "HEAD"]);
+      expect(head.stdout.trim()).toBe(commit);
+    },
+  );
 });

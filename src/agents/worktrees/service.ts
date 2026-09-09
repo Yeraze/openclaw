@@ -294,6 +294,55 @@ async function resolveRepository(repoRoot: string): Promise<ResolvedRepository> 
   return await resolveRepositoryFromRealPath(requested, repoRoot);
 }
 
+type RepositoryBranchRef = {
+  ref: string;
+  branchName: string;
+  branch: ManagedWorktreeBranch;
+};
+
+async function listRepositoryBranchRefs(
+  repoRoot: string,
+  pattern: string,
+  count: number,
+): Promise<RepositoryBranchRef[]> {
+  const result = await runGit(
+    repoRoot,
+    [
+      "-c",
+      "core.warnAmbiguousRefs=true",
+      "for-each-ref",
+      `--count=${count}`,
+      "--sort=refname",
+      "--format=%(refname)%00%(refname:short)",
+      pattern,
+    ],
+    { maxOutputBytes: BRANCH_INVENTORY_MAX_OUTPUT_BYTES },
+  );
+  const output = requireGitCommandOutput("git for-each-ref", result);
+  const branches: RepositoryBranchRef[] = [];
+  for (const line of output.trim().split("\n")) {
+    const [ref, name] = line.split("\0");
+    if (!ref || !name) {
+      continue;
+    }
+    if (ref.startsWith("refs/heads/")) {
+      branches.push({
+        ref,
+        branchName: ref.slice("refs/heads/".length),
+        branch: { name, kind: "local" },
+      });
+    } else if (ref.startsWith("refs/remotes/")) {
+      const remoteRef = ref.slice("refs/remotes/".length);
+      const slash = remoteRef.indexOf("/");
+      const branchName = remoteRef.slice(slash + 1);
+      if (slash > 0 && branchName && branchName !== "HEAD") {
+        branches.push({ ref, branchName, branch: { name, kind: "remote" } });
+      }
+    }
+  }
+  return branches;
+}
+
 async function canonicalPathKey(target: string): Promise<string> {
   const canonical = await fs.realpath(target);
   return process.platform === "win32" ? canonical.toLowerCase() : canonical;
@@ -1092,89 +1141,71 @@ export class ManagedWorktreeService {
     } else {
       repository = await resolveRepository(repoRoot);
     }
-    // Suggestions are bounded at Git; their availability cannot invalidate the
-    // checkout already verified above. Never parse output rejected by the byte guard.
-    const branches = new Map<string, ManagedWorktreeBranch>();
+    // Keep canonical refs for identity and Git's strict short names for selection.
+    // A branch named like a tag may need heads/ or remotes/ to remain unambiguous.
+    const branches = new Map<string, RepositoryBranchRef>();
     let branchesUnavailable = false;
-    for (const [prefix, kind] of [
-      ["refs/remotes/", "remote"],
-      ["refs/heads/", "local"],
-    ] as const) {
+    for (const prefix of ["refs/remotes/", "refs/heads/"]) {
       try {
-        const result = await runGit(
+        for (const entry of await listRepositoryBranchRefs(
           repository.repoRoot,
-          [
-            "for-each-ref",
-            `--count=${BRANCH_SUGGESTIONS_PER_KIND}`,
-            "--sort=refname",
-            "--format=%(refname)",
-            prefix,
-          ],
-          { maxOutputBytes: BRANCH_INVENTORY_MAX_OUTPUT_BYTES },
-        );
-        const output = requireGitCommandOutput("git for-each-ref", result);
-        for (const ref of output.trim().split("\n")) {
-          if (!ref.startsWith(prefix)) {
-            continue;
-          }
-          const name = ref.slice(prefix.length);
-          const slash = name.indexOf("/");
-          const shortName = kind === "remote" ? name.slice(slash + 1) : name;
-          if (!shortName || (kind === "remote" && (slash <= 0 || shortName === "HEAD"))) {
-            continue;
-          }
-          // Local branches win collisions; remote-only refs retain their remote qualifier.
-          branches.set(shortName, { name, kind });
+          prefix,
+          BRANCH_SUGGESTIONS_PER_KIND,
+        )) {
+          // Local branches win collisions with the same logical remote branch name.
+          branches.set(entry.branchName, entry);
         }
       } catch {
+        // Never parse partial output or invalidate the already verified checkout.
         branchesUnavailable = true;
       }
     }
     const remoteHead = await runGit(repository.repoRoot, [
       "symbolic-ref",
       "--quiet",
-      "--short",
       "refs/remotes/origin/HEAD",
     ]);
-    const defaultShort =
-      remoteHead.code === 0
-        ? remoteHead.stdout.trim().replace(/^origin\//, "") || undefined
-        : undefined;
-    const head = await runGit(repository.repoRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    const headBranch = head.code === 0 ? head.stdout.trim() || undefined : undefined;
-    // Resolve priority refs independently: alphabetical suggestion limits may omit both.
-    if (defaultShort) {
-      const localDefault = await runGit(repository.repoRoot, [
-        "show-ref",
-        "--verify",
-        "--quiet",
-        `refs/heads/${defaultShort}`,
-      ]);
-      branches.set(
-        defaultShort,
-        localDefault.code === 0
-          ? { name: defaultShort, kind: "local" }
-          : { name: remoteHead.stdout.trim(), kind: "remote" },
-      );
-    }
-    if (headBranch) {
-      branches.set(headBranch, { name: headBranch, kind: "local" });
-    }
-    const defaultBranch = defaultShort
-      ? (branches.get(defaultShort)?.name ?? defaultShort)
+    const defaultRef = remoteHead.code === 0 ? remoteHead.stdout.trim() : undefined;
+    const head = await runGit(repository.repoRoot, ["symbolic-ref", "--quiet", "HEAD"]);
+    const headRef = head.code === 0 ? head.stdout.trim() : undefined;
+    const resolveBranch = async (ref: string | undefined) => {
+      if (!ref) {
+        return undefined;
+      }
+      const known = [...branches.values()].find((entry) => entry.ref === ref);
+      if (known) {
+        return known;
+      }
+      try {
+        // Patterns can match descendants; only the exact priority ref is eligible.
+        return (await listRepositoryBranchRefs(repository.repoRoot, ref, 1)).find(
+          (entry) => entry.ref === ref,
+        );
+      } catch {
+        branchesUnavailable = true;
+        return undefined;
+      }
+    };
+    const localDefaultRef = defaultRef?.startsWith("refs/remotes/origin/")
+      ? `refs/heads/${defaultRef.slice("refs/remotes/origin/".length)}`
       : undefined;
-    // Deterministic picker ordering: default base first, current checkout next, rest alphabetical.
-    const rank = (shortName: string) =>
-      shortName === defaultShort ? 0 : shortName === headBranch ? 1 : 2;
-    const sorted = [...branches.entries()]
-      .toSorted(
-        ([aShort, a], [bShort, b]) => rank(aShort) - rank(bShort) || a.name.localeCompare(b.name),
-      )
-      .map(([, branch]) => branch);
+    // Priority refs must survive the inventory bound and use the same disambiguation.
+    const defaultEntry =
+      (await resolveBranch(localDefaultRef)) ?? (await resolveBranch(defaultRef));
+    const headEntry = await resolveBranch(headRef);
+    for (const entry of [defaultEntry, headEntry]) {
+      if (entry) {
+        branches.set(entry.branchName, entry);
+      }
+    }
+    const rank = (entry: RepositoryBranchRef) =>
+      entry.ref === defaultEntry?.ref ? 0 : entry.ref === headEntry?.ref ? 1 : 2;
     return {
-      branches: sorted,
-      ...(defaultBranch ? { defaultBranch } : {}),
-      ...(headBranch ? { headBranch } : {}),
+      branches: [...branches.values()]
+        .toSorted((a, b) => rank(a) - rank(b) || a.branch.name.localeCompare(b.branch.name))
+        .map((entry) => entry.branch),
+      ...(defaultEntry ? { defaultBranch: defaultEntry.branch.name } : {}),
+      ...(headEntry ? { headBranch: headEntry.branch.name } : {}),
       ...(options.includeRepositoryStatus ? { repositoryStatus: "git" as const } : {}),
       ...(branchesUnavailable ? { branchesUnavailable: true } : {}),
     };
