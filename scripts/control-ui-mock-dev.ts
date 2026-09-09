@@ -2823,7 +2823,6 @@ async function createChatPickerScenario(
       "plugins.inspect": buildPluginInspectMock({
         installedCopies: fixture === "plugins-dense" ? 10 : 1,
       }),
-      "plugins.setEnabled": buildPluginSetEnabledMock(),
       "skills.status": {
         workspaceDir: "/Users/demo/Projects/openclaw",
         managedSkillsDir: "/Users/demo/.openclaw/skills",
