@@ -1032,7 +1032,7 @@ jobs:
     if: inputs.include_live_suites && !inputs.live_models_only && (inputs.live_suite_filter == '' || inputs.live_suite_filter == 'live-cache')
     continue-on-error: ${{ inputs.advisory || inputs.live_advisory }}
     runs-on: ${{ inputs.use_github_hosted_runners && 'ubuntu-24.04' || 'blacksmith-8vcpu-ubuntu-2404' }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -1077,6 +1077,14 @@ jobs:
             fi
             sleep $((attempt * 15))
           done
+
+      - name: Verify Gateway runtime prompt cache
+        if: ${{ !cancelled() }}
+        env:
+          OPENCLAW_LIVE_CACHE_RUNTIME_PROFILE: daily
+        run: |
+          set -euo pipefail
+          timeout --foreground --kill-after=30s 25m pnpm test:live:cache:runtime
 
   validate_repo_e2e_gateway:
     name: Gateway E2E

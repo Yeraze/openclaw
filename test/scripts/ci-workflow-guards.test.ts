@@ -90,6 +90,28 @@ const AMBIGUOUS_MAIN_PUSH_GUARD = `if [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$
   exit 1
 fi`;
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
+it("runs the complete Gateway cache matrix separately from synthetic cache retries", () => {
+  const workflow = parse(
+    readFileSync(".github/workflows/openclaw-live-and-e2e-checks-reusable.yml", "utf8"),
+  );
+  const job = workflow.jobs.validate_release_live_cache;
+  expect(job["continue-on-error"]).toBe("${{ inputs.advisory || inputs.live_advisory }}");
+  expect(job.if).toBe(
+    "inputs.include_live_suites && !inputs.live_models_only && (inputs.live_suite_filter == '' || inputs.live_suite_filter == 'live-cache')",
+  );
+  const steps = job.steps as WorkflowStep[];
+  const synthetic = steps.find((step) => step.name === "Verify live prompt cache floors");
+  const runtime = steps.filter((step) => step.name === "Verify Gateway runtime prompt cache");
+  expect(synthetic?.run).toContain("for attempt in 1 2");
+  expect(synthetic?.run).toContain("pnpm test:live:cache;");
+  expect(synthetic?.run).not.toContain("test:live:cache:runtime");
+  expect(runtime).toHaveLength(1);
+  expect(runtime[0]?.if).toBe("${{ !cancelled() }}");
+  expect(runtime[0]?.env).toEqual({ OPENCLAW_LIVE_CACHE_RUNTIME_PROFILE: "daily" });
+  expect(runtime[0]?.run).toContain("pnpm test:live:cache:runtime");
+  expect(runtime[0]?.run).not.toMatch(/for attempt|retry|continue-on-error/);
+  expect(runtime[0]?.["continue-on-error"]).toBeUndefined();
+});
 const rootPackageManager = (
   JSON.parse(readFileSync("package.json", "utf8")) as {
     packageManager: string;
