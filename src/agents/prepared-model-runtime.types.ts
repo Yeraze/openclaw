@@ -13,6 +13,7 @@ import type { AgentHarnessPluginSelection } from "./harness/runtime-plugin-load-
 import type { ModelCatalogEntry, ModelCatalogSnapshot } from "./model-catalog.types.js";
 import type { PublishedModelCatalogOwnerCandidate } from "./prepared-model-catalog.types.js";
 import type { PreparedConfiguredRuntimeModel } from "./prepared-model-runtime.configured.js";
+import type { PreparedModelRuntimeResourceClaim } from "./prepared-model-runtime.resources.js";
 import type { AuthStorage, AuthStorageData } from "./sessions/auth-storage.js";
 import type { ModelRegistry } from "./sessions/model-registry.js";
 
@@ -214,6 +215,7 @@ export type PreparedModelRuntimeOwner = {
   refreshError?: Error;
   snapshot?: PreparedModelRuntimeSnapshot;
   pluginGeneration?: PreparedModelRuntimePluginGeneration;
+  resourceClaim?: PreparedModelRuntimeResourceClaim;
   /** Explicit generation admitted for the current publication, when known. */
   pendingPluginGeneration?: PreparedModelRuntimePluginGeneration;
   pending?: Promise<PreparedModelRuntimeSnapshot>;
