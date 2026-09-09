@@ -13,11 +13,12 @@ import type { AgentHarnessPluginSelection } from "./harness/runtime-plugin-load-
 import type { ModelCatalogEntry, ModelCatalogSnapshot } from "./model-catalog.types.js";
 import type { PublishedModelCatalogOwnerCandidate } from "./prepared-model-catalog.types.js";
 import type { PreparedConfiguredRuntimeModel } from "./prepared-model-runtime.configured.js";
-import type { PreparedModelRuntimeResourceClaim } from "./prepared-model-runtime.resources.js";
 import type { AuthStorage, AuthStorageData } from "./sessions/auth-storage.js";
 import type { ModelRegistry } from "./sessions/model-registry.js";
 
 export type PreparedModelRuntimeCatalogMode = "live" | "static";
+
+export type PreparedModelRuntimeResourceClaim = { release: () => void };
 
 export type PreparedMediaCapabilityProviderSource = Readonly<{
   registry: PluginRegistry;

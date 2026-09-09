@@ -56,7 +56,6 @@ import { createCatalogAttemptReporter } from "./prepared-model-runtime.publicati
 import {
   PreparedModelRuntimeBuildResources,
   retainPreparedModelRuntimeGenerationResources,
-  type PreparedModelRuntimeResourceClaim,
 } from "./prepared-model-runtime.resources.js";
 import { prepareAgentCatalogSource } from "./prepared-model-runtime.scoped-catalog.js";
 import type {
@@ -65,6 +64,7 @@ import type {
   PreparedModelRuntimeInput,
   PreparedModelRuntimeOwner,
   PreparedModelRuntimePluginGeneration,
+  PreparedModelRuntimeResourceClaim,
   PreparedModelRuntimeSnapshot,
 } from "./prepared-model-runtime.types.js";
 

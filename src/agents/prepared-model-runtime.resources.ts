@@ -2,13 +2,14 @@ import type { PluginRegistry } from "../plugins/registry-types.js";
 import { createDeferredCore } from "../shared/deferred.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import { capturePreparedModelRuntimeLifetime } from "./prepared-model-runtime.lifecycle.js";
-import type { PreparedModelRuntimePluginGeneration } from "./prepared-model-runtime.types.js";
+import type {
+  PreparedModelRuntimePluginGeneration,
+  PreparedModelRuntimeResourceClaim,
+} from "./prepared-model-runtime.types.js";
 import {
   acquireAgentRuntimePluginRegistry,
   type AcquiredAgentRuntimePluginRegistry,
 } from "./runtime-plugins.js";
-
-export type PreparedModelRuntimeResourceClaim = { release: () => void };
 
 const state = resolveGlobalSingleton(
   Symbol.for("openclaw.ephemeralPreparedRegistryResources"),
