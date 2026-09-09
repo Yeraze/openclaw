@@ -470,8 +470,9 @@ async function processMessageWithPipeline(params: {
             deliver: async (payload, info) => {
               // Intermediate deliveries (tool/block payloads) must not consume the
               // placeholder or draft stream — those belong to the final collapse.
-              // Deliver them and leave live progress running.
-              if (info.kind !== "final") {
+              // Deliver them and leave live progress running. A missing info means
+              // the caller only distinguishes the final delivery, so treat it as final.
+              if (info && info.kind !== "final") {
                 await deliverGoogleChatReply({
                   payload,
                   account,

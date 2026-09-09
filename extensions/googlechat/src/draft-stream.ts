@@ -95,6 +95,7 @@ export function createGoogleChatDraftStream(params: {
   });
 
   const compositor = createChannelProgressDraftCompositor({
+    // SAFETY: account.config is the resolved GoogleChatAccountConfig for this account.
     entry: account.config as GoogleChatAccountConfig,
     mode: "progress" satisfies StreamingMode,
     active: true,
