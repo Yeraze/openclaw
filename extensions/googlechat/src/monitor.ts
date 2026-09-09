@@ -433,6 +433,16 @@ async function processGoogleChatEvent(
                 if (typingMessage && liveName && liveName !== typingMessage.name) {
                   typingMessage = { ...typingMessage, name: liveName };
                 }
+                const liveThread = draftStream.deliveredThreadName();
+                // A 404 re-send may have landed the placeholder in a fresh thread;
+                // follow it so the done status and answer stay together.
+                if (
+                  typingMessage?.placement === "thread" &&
+                  liveThread &&
+                  liveThread !== typingMessage.deliveredThreadName
+                ) {
+                  typingMessage = { ...typingMessage, deliveredThreadName: liveThread };
+                }
                 draftStream = undefined;
               }
               const normalizedPayload = normalizeGoogleChatReplyTarget({
