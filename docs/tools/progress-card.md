@@ -126,5 +126,5 @@ Omit `props.sessionKey` to follow the dashboard's session. To show another sessi
 ## Related
 
 - [Tools overview](/tools)
-- [`openclaw dashboard`](/cli/dashboard) — where progress cards are rendered
-- [Control UI URLs](/web/urls) — reaching the dashboard in a browser
+- [`openclaw dashboard`](/cli/dashboard) — open the Control UI from the CLI
+- [Control UI URLs](/web/urls) — reaching the Control UI in a browser

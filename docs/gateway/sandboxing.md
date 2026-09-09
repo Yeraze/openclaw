@@ -638,4 +638,4 @@ Each agent can override sandbox + tools: `agents.entries.*.sandbox` and `agents.
 - [Sandbox vs Tool Policy vs Elevated](/gateway/sandbox-vs-tool-policy-vs-elevated) -- debugging "why is this blocked?"
 - [Security](/gateway/security)
 - [`openclaw sandbox`](/cli/sandbox) — inspect and exercise the sandbox from the CLI
-- [Cloud Workers](/gateway/cloud-workers) — remote worker sessions that use these sandbox settings
+- [Cloud Workers](/gateway/cloud-workers) — dispatching session work to throwaway cloud machines; its managed workspace is not an OS sandbox

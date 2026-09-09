@@ -942,4 +942,4 @@ This store page manages values only. Configure the corresponding `store` SecretR
 - [Secrets Apply Plan Contract](/gateway/secrets-plan-contract) - plan contract details
 - [Security](/gateway/security) - security posture
 - [Configuration reference](/gateway/configuration-reference) - where each secrets and env setting is documented
-- [Ask user](/tools/ask-user) - prompting the operator for a value instead of storing it
+- [Ask user](/tools/ask-user) - asking the operator a non-secret question; never answer it with a credential, use the masked `secrets` tool for those

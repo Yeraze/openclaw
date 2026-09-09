@@ -173,6 +173,7 @@ exception), so the agent can self-correct:
     Grok models, web/x search, and code execution config.
   </Card>
   <Card title="Code Mode" href="/tools/code-mode" icon="code">
-    The agent-facing mode built on this execution surface.
+    A separate surface: JavaScript/TypeScript orchestration of enabled tools in
+    OpenClaw's own worker, not this remote Python tool.
   </Card>
 </CardGroup>

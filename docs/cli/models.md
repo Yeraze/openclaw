@@ -365,4 +365,4 @@ Notes:
 - [CLI reference](/cli)
 - [Model selection](/concepts/model-providers)
 - [Model failover](/concepts/model-failover)
-- [`openclaw promos`](/cli/promos) — provider promotions that affect model pricing
+- [`openclaw promos`](/cli/promos) — list and claim promotional model offers
