@@ -4,9 +4,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Bot } from "grammy";
+import { Bot, HttpError } from "grammy";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { listSessionEntries } from "openclaw/plugin-sdk/session-store-runtime";
+import { asNonArrayRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultTelegramBotDeps, type TelegramBotDeps } from "./bot-deps.js";
 import type { TelegramCallbackMessageRuntime } from "./bot-handlers.callback-router-controls.js";
@@ -23,6 +24,21 @@ const PROVIDER = "ollama";
 const MODEL = "xentriom/gemma-4-12B-agentic-fable5-composer2.5-v2:latest";
 
 type TelegramApiRequest = { method: string; payload: Record<string, unknown> };
+
+function transportErrorFields(error: unknown): Record<string, string | number> {
+  const record = asNonArrayRecord(error);
+  const fields: Record<string, string | number> = {};
+  // Error messages can contain the Bot API URL and token; retain bounded identifiers only.
+  for (const key of ["name", "type", "code"]) {
+    const value = record[key];
+    if (typeof value === "string") {
+      fields[key] = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value) ? value : "[redacted]";
+    } else if (typeof value === "number" && Number.isSafeInteger(value)) {
+      fields[key] = value;
+    }
+  }
+  return fields;
+}
 
 async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -96,6 +112,9 @@ describe("Telegram model callback loopback", () => {
         response.destroy(error instanceof Error ? error : new Error(String(error)));
       });
     });
+    // This in-process fixture must not expire pooled connections during model selection.
+    // Explicit teardown owns their lifetime.
+    server.keepAliveTimeout = 0;
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", resolve);
     });
@@ -140,6 +159,21 @@ describe("Telegram model callback loopback", () => {
 
       const callbackSteps: string[] = [];
       const bot = new Bot(TOKEN, { botInfo: telegramBotInfoForTest, client: { apiRoot } });
+      let firstTransportError: string | undefined;
+      bot.api.config.use(async (prev, method, payload, signal) => {
+        try {
+          return await prev(method, payload, signal);
+        } catch (error) {
+          if (error instanceof HttpError && firstTransportError === undefined) {
+            const cause = asNonArrayRecord(error.error).cause;
+            firstTransportError = JSON.stringify({
+              ...transportErrorFields(error.error),
+              ...(cause === undefined ? {} : { cause: transportErrorFields(cause) }),
+            });
+          }
+          throw error;
+        }
+      });
       const telegramDeps = {
         ...defaultTelegramBotDeps,
         buildModelsProviderData: async (): ReturnType<
@@ -230,26 +264,36 @@ describe("Telegram model callback loopback", () => {
         },
       });
 
-      expect(requests.map(({ method }) => method)).toEqual([
-        "sendMessage",
-        "answerCallbackQuery",
-        "editMessageText",
-      ]);
+      const diagnostic = `First Bot API transport error: ${firstTransportError ?? "none"}`;
+      expect(
+        requests.map(({ method }) => method),
+        diagnostic,
+      ).toEqual(["sendMessage", "answerCallbackQuery", "editMessageText"]);
       expect(callbackSteps).toEqual(["context", "sender", "model", "catalog"]);
-      expect(listSessionEntries({ storePath })[0]?.entry).toMatchObject({
+      expect(listSessionEntries({ storePath })[0]?.entry, diagnostic).toMatchObject({
         providerOverride: PROVIDER,
         modelOverride: MODEL,
         modelOverrideSource: "user",
         liveModelSwitchPending: true,
       });
-      expect(requests.at(-1)?.payload.text).toContain(
+      expect(requests.at(-1)?.payload.text, diagnostic).toContain(
         `Model changed to <b>${PROVIDER}/${MODEL}</b>`,
       );
     } finally {
-      server.close();
-      server.closeAllConnections();
-      server.unref();
-      await rm(stateDir, { recursive: true, force: true });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          });
+          server.closeAllConnections();
+        });
+      } finally {
+        await rm(stateDir, { recursive: true, force: true });
+      }
     }
   });
 });
