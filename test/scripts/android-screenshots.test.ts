@@ -216,6 +216,9 @@ exit 97
         );
         expect(description.status, description.stderr).toBe(0);
         const [format, size, colorspace, type, channels, quality] = description.stdout.split("|");
+        if (!colorspace || !channels) {
+          throw new Error("Expected JPEG colorspace and channel metadata");
+        }
         expect(format).toBe("JPEG");
         expect(size).toBe(dimensions);
         expect(colorspace.toLowerCase()).toBe("srgb");
