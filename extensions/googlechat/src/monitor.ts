@@ -403,14 +403,14 @@ async function processMessageWithPipeline(params: {
   // Both "message" and "live" post the same placeholder; "live" then edits it in
   // place with progress before the final collapse.
   const usesPlaceholder = typingIndicator === "message" || typingIndicator === "live";
+  const botName = resolveBotDisplayName({
+    accountName: account.config.name,
+    agentId: route.agentId,
+    config,
+  });
   let draftStream: GoogleChatDraftStream | undefined;
   if (usesPlaceholder) {
     try {
-      const botName = resolveBotDisplayName({
-        accountName: account.config.name,
-        agentId: route.agentId,
-        config,
-      });
       const result = await sendGoogleChatMessage({
         account,
         space: spaceId,
@@ -488,6 +488,8 @@ async function processMessageWithPipeline(params: {
               config,
               statusSink,
               typingMessage,
+              liveMode: typingIndicator === "live",
+              doneStatusText: `_${botName} is done — reply below._`,
             });
             // Only use typing message for first delivery
             typingMessage = undefined;
