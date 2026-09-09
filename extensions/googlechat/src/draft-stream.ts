@@ -84,7 +84,7 @@ export function createGoogleChatDraftStream(params: {
     }
   };
 
-  const loop = createDraftStreamLoop<string>({
+  const loop = createDraftStreamLoop({
     throttleMs: GOOGLECHAT_DRAFT_THROTTLE_MS,
     coalesceInFlight: true,
     isStopped: () => stopped,
@@ -128,9 +128,9 @@ export function createGoogleChatDraftStream(params: {
   };
 
   return {
-    pushToolEvent: compositor.pushToolEvent,
-    pushItemEvent: compositor.pushItemEvent,
-    pushReasoningProgress: compositor.pushReasoningProgress,
+    pushToolEvent: (...args) => compositor.pushToolEvent(...args),
+    pushItemEvent: (...args) => compositor.pushItemEvent(...args),
+    pushReasoningProgress: (...args) => compositor.pushReasoningProgress(...args),
     messageName: () => messageName,
     finalize,
     stop,
