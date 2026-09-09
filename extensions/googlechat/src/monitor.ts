@@ -12,6 +12,7 @@ import { channelBlockedPatch, channelReadyPatch } from "openclaw/plugin-sdk/gate
 import { MediaFetchError } from "openclaw/plugin-sdk/media-runtime";
 import { parseDateStringTimestampMs as resolveGoogleChatTimestampMs } from "openclaw/plugin-sdk/number-runtime";
 import { mergePairLoopGuardConfig } from "openclaw/plugin-sdk/pair-loop-guard-runtime";
+import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import type { OpenClawConfig } from "../runtime-api.js";
 import { resolveWebhookPath } from "../runtime-api.js";
@@ -459,14 +460,14 @@ async function processMessageWithPipeline(params: {
         route: { agentId: route.agentId, sessionKey: route.sessionKey },
         ctxPayload,
         delivery: {
-          durable: (payload, info) =>
+          durable: (payload: ReplyPayload, info: { kind: string }) =>
             resolveGoogleChatDurableReplyOptions({
               payload,
               infoKind: info.kind,
               spaceId,
               hasTypingMessage: Boolean(typingMessage),
             }),
-          deliver: async (payload, info) => {
+          deliver: async (payload: ReplyPayload, info: { kind: string } | undefined) => {
             // Intermediate deliveries (tool/block payloads) must not consume the
             // placeholder or draft stream — those belong to the final collapse.
             // Deliver them and leave live progress running. A missing info means
@@ -513,7 +514,7 @@ async function processMessageWithPipeline(params: {
           onDelivered: () => {
             statusSink?.({ lastOutboundAt: Date.now() });
           },
-          onError: (err, info) => {
+          onError: (err: unknown, info: { kind: string }) => {
             runtime.error?.(
               `[${account.accountId}] Google Chat ${info.kind} reply failed: ${String(err)}`,
             );
@@ -529,9 +530,31 @@ async function processMessageWithPipeline(params: {
                 // onItemEvent reach the draft stream instead of freezing.
                 suppressDefaultToolProgressMessages: true,
                 allowToolLifecycleWhenProgressHidden: true,
-                onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
-                onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
-                onReasoningStream: (payload) =>
+                onToolStart: (payload: {
+                  itemId?: string;
+                  toolCallId?: string;
+                  name?: string;
+                  phase?: string;
+                  args?: Record<string, unknown>;
+                  detailMode?: "explain" | "raw";
+                }) => draftStream?.pushToolEvent(payload) ?? false,
+                onItemEvent: (payload: {
+                  itemId?: string;
+                  toolCallId?: string;
+                  kind?: string;
+                  title?: string;
+                  name?: string;
+                  phase?: string;
+                  status?: string;
+                  summary?: string;
+                  progressText?: string;
+                  meta?: string;
+                  commandBearing?: boolean;
+                  approvalId?: string;
+                  approvalSlug?: string;
+                  suppressDurableProgress?: true;
+                }) => draftStream?.pushItemEvent(payload) ?? false,
+                onReasoningStream: (payload: { text?: string; isReasoningSnapshot?: boolean }) =>
                   draftStream?.pushReasoningProgress(payload.text || "Thinking…", {
                     snapshot: payload.isReasoningSnapshot === true,
                   }) ?? false,
@@ -539,7 +562,7 @@ async function processMessageWithPipeline(params: {
             }
           : {}),
         record: {
-          onRecordError: (err) => {
+          onRecordError: (err: unknown) => {
             runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
           },
         },
