@@ -26,6 +26,7 @@ import {
   updateGoogleChatMessage,
 } from "./api.js";
 import { maybeHandleGoogleChatApprovalCardClick } from "./approval-card-click.js";
+import { createGoogleChatDraftStream, type GoogleChatDraftStream } from "./draft-stream.js";
 import { formatGoogleChatMediaText, formatGoogleChatTextChunks } from "./format.js";
 import { applyGoogleChatInboundAccessPolicy } from "./monitor-access.js";
 import {
@@ -302,7 +303,11 @@ async function processGoogleChatEvent(
       ? replyThreadName
       : undefined;
 
-  if (typingIndicator === "message") {
+  // Both "message" and "live" post the same placeholder; "live" then edits it in
+  // place with progress before the final collapse.
+  const usesPlaceholder = typingIndicator === "message" || typingIndicator === "live";
+  let draftStream: GoogleChatDraftStream | undefined;
+  if (usesPlaceholder) {
     try {
       const accountName = account.config.name;
       const agentId = route.agentId;
@@ -327,6 +332,15 @@ async function processGoogleChatEvent(
           requestedThreadName: effectiveReplyThreadName,
           deliveredThreadName: result.threadName,
         });
+        if (typingIndicator === "live") {
+          draftStream = createGoogleChatDraftStream({
+            account,
+            spaceId,
+            messageName: result.messageName,
+            threadName: result.threadName ?? effectiveReplyThreadName,
+            runtime,
+          });
+        }
       }
     } catch (err) {
       runtime.error?.(`Failed sending typing message: ${String(err)}`);
@@ -403,6 +417,18 @@ async function processGoogleChatEvent(
               };
             },
             deliver: async (payload) => {
+              if (draftStream) {
+                // Stop live progress edits and drain the last in-flight one before
+                // the final collapse, so a late edit cannot clobber the answer. The
+                // draft stream shares the placeholder message, so hand delivery its
+                // current name (a 404 re-send may have adopted a fresh one).
+                await draftStream.stop();
+                const liveName = draftStream.messageName();
+                if (typingMessage && liveName && liveName !== typingMessage.name) {
+                  typingMessage = { ...typingMessage, name: liveName };
+                }
+                draftStream = undefined;
+              }
               const normalizedPayload = normalizeGoogleChatReplyTarget({
                 payload,
                 sourceMessageName: message.name,
@@ -543,6 +569,18 @@ async function processGoogleChatEvent(
             },
           },
           replyPipeline: {},
+          ...(draftStream
+            ? {
+                replyOptions: {
+                  onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
+                  onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
+                  onReasoningStream: (payload) =>
+                    draftStream?.pushReasoningProgress(payload.text || "Thinking…", {
+                      snapshot: payload.isReasoningSnapshot === true,
+                    }) ?? false,
+                },
+              }
+            : {}),
           record: {
             onRecordError: (err) => {
               runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
