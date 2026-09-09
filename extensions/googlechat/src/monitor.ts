@@ -418,8 +418,9 @@ async function processGoogleChatEvent(
             deliver: async (payload, info) => {
               // Intermediate deliveries (tool/block payloads) must not consume the
               // placeholder or draft stream — those belong to the final collapse.
-              // Deliver them and leave live progress running.
-              const usesTypingMessage = info.kind === "final";
+              // Deliver them and leave live progress running. A missing info means
+              // the caller only distinguishes the final delivery, so treat it as final.
+              const usesTypingMessage = !info || info.kind === "final";
               if (usesTypingMessage && draftStream) {
                 // Stop live progress edits and drain the last in-flight one before
                 // the final collapse, so a late edit cannot clobber the answer. The
