@@ -79,13 +79,18 @@ describe("ManagedWorktreeService branch discovery", () => {
     },
   );
 
-  it("rejects a truncated branch inventory instead of returning a partial picker", async () => {
+  it("keeps large repositories usable with bounded suggestions and an explicit unlisted base", async () => {
     const { stdout } = await execFileAsync("git", ["-C", repo, "rev-parse", "HEAD"]);
     const commit = stdout.trim();
-    const refs = Array.from(
-      { length: 3_000 },
-      (_, index) => `refs/heads/overflow-${String(index).padStart(80, "0")}`,
-    );
+    const refs = [
+      ...["refs/heads", "refs/remotes/origin"].flatMap((prefix) =>
+        Array.from(
+          { length: 3_000 },
+          (_, index) => `${prefix}/overflow-${String(index).padStart(80, "0")}`,
+        ),
+      ),
+      "refs/remotes/origin/z-default",
+    ].sort();
     await fs.writeFile(
       path.join(repo, ".git", "packed-refs"),
       "# pack-refs with: peeled fully-peeled sorted\n" +
@@ -93,8 +98,53 @@ describe("ManagedWorktreeService branch discovery", () => {
         "\n",
     );
 
-    await expect(service.listRepositoryBranches(repo)).rejects.toThrow(
-      "too many branches to list safely",
+    await git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/z-default");
+    await git(repo, "switch", "-c", "z-current");
+    const inventory = await execFileAsync("git", [
+      "-C",
+      repo,
+      "for-each-ref",
+      "--format=%(refname)",
+      "refs/remotes",
+    ]);
+    expect(Buffer.byteLength(inventory.stdout)).toBeGreaterThan(256 * 1024);
+
+    const result = await service.listRepositoryBranches(repo, { includeRepositoryStatus: true });
+    expect(result.repositoryStatus).toBe("git");
+    expect(result.branches.length).toBeLessThanOrEqual(202);
+    expect(result.defaultBranch).toBe("origin/z-default");
+    expect(result.headBranch).toBe("z-current");
+    expect(result.branches.slice(0, 2)).toEqual([
+      { name: "origin/z-default", kind: "remote" },
+      { name: "z-current", kind: "local" },
+    ]);
+    const baseRef = `origin/overflow-${String(2_999).padStart(80, "0")}`;
+    expect(result.branches.some((branch) => branch.name === baseRef)).toBe(false);
+    const worktree = await service.create({ repoRoot: repo, name: "unlisted-base", baseRef });
+    const createdHead = await execFileAsync("git", ["-C", worktree.path, "rev-parse", "HEAD"]);
+    expect(createdHead.stdout.trim()).toBe(commit);
+    await expect(
+      service.create({ repoRoot: repo, name: "invalid-base", baseRef: "missing-branch" }),
+    ).rejects.toThrow(/base ref|resolve|revision/i);
+  });
+
+  it("retains Git availability without parsing suggestions that exceed the byte guard", async () => {
+    const { stdout } = await execFileAsync("git", ["-C", repo, "rev-parse", "HEAD"]);
+    const prefix = "segment/".repeat(400);
+    const refs = Array.from(
+      { length: 100 },
+      (_, index) =>
+        `${stdout.trim()} refs/remotes/origin/${prefix}${String(index).padStart(3, "0")}`,
     );
+    await fs.writeFile(path.join(repo, ".git", "packed-refs"), `${refs.join("\n")}\n`);
+
+    await expect(
+      service.listRepositoryBranches(repo, { includeRepositoryStatus: true }),
+    ).resolves.toEqual({
+      repositoryStatus: "git",
+      branchesUnavailable: true,
+      branches: [{ name: "main", kind: "local" }],
+      headBranch: "main",
+    });
   });
 });
