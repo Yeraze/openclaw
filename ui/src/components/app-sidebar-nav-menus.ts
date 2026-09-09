@@ -97,9 +97,7 @@ export function renderSidebarPluginTab(params: {
   onNavigate: (search: string) => void;
 }) {
   const search = pluginTabSearch({ pluginId: params.tab.pluginId, id: params.tab.id });
-  const iconName = Object.hasOwn(icons, params.tab.icon!)
-    ? (params.tab.icon as IconName)
-    : "puzzle";
+  const iconName = Object.hasOwn(icons, params.tab.icon!) ? (params.tab.icon as IconName) : "plug";
   return html`
     <a
       href=${`${pathForRoute("plugin", params.basePath)}${search}`}
@@ -295,7 +293,7 @@ export function renderSidebarCustomizeMenu(params: SidebarCustomizeMenuParams) {
             value=${`plugin:${entry.key}`}
             .checked=${params.sidebarEntries.includes(`plugin:${entry.key}`)}
           >
-            <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.puzzle}</span>
+            <span slot="icon" class="nav-item__icon" aria-hidden="true">${icons.plug}</span>
             <span class="sidebar-customize-menu__text">${entry.value.label}</span>
           </wa-dropdown-item>`,
         )}
