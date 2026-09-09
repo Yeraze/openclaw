@@ -31,10 +31,7 @@ import {
 import { loadPluginManifestRegistryCore } from "./manifest-registry.js";
 import { safeRealpathSync } from "./path-safety.js";
 import { createPluginCache, withPluginCache } from "./plugin-cache.js";
-import {
-  resolvePluginConfigEnablement,
-  type PluginConfigEnablement,
-} from "./plugin-config-enablement.js";
+import { resolvePluginConfigEnablement } from "./plugin-config-enablement.js";
 import { tracePluginLifecyclePhaseAsync } from "./plugin-lifecycle-trace.js";
 import { loadPluginMetadataSnapshot } from "./plugin-metadata-snapshot.js";
 import { refreshPluginRegistryAfterConfigMutation } from "./registry-refresh.js";
@@ -219,8 +216,6 @@ export function prepareConfigForDisabledInstall(cfg: OpenClawConfig, id: string)
     },
   };
 }
-
-export { resolvePluginConfigEnablement, type PluginConfigEnablement };
 
 export async function persistPluginInstall(params: {
   snapshot: ConfigSnapshotForInstallPersist;
