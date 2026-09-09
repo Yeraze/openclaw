@@ -1852,7 +1852,7 @@ describe("mobile release authority", () => {
     expect(validationJob["timeout-minutes"]).toBe(5);
     expect(job.permissions).toEqual({ contents: "read" });
     expect(job.needs).toBe("validate-target");
-    expect(job["runs-on"]).toBe("macos-26-intel");
+    expect(job["runs-on"]).toBe("macos-26-large");
     expect(job["timeout-minutes"]).toBe(25);
     expect(job.env).toEqual({
       ANDROID_SCREENSHOT_EMULATOR_TIMEOUT_SECONDS: "180",

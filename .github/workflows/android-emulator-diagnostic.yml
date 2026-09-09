@@ -87,7 +87,7 @@ jobs:
 
   diagnose:
     needs: validate-target
-    runs-on: macos-26-intel
+    runs-on: macos-26-large
     timeout-minutes: 25
     permissions:
       contents: read
