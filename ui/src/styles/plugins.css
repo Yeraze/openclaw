@@ -1,9 +1,3 @@
-@import "@openclaw/carapace/tokens.css";
-@import "@openclaw/carapace/components.css";
-@import "@openclaw/carapace/candidate/controls.css";
-@import "@openclaw/carapace/candidate/feedback.css";
-@import "@openclaw/carapace/candidate/data.css";
-@import "@openclaw/carapace/candidate/application.css";
 @import "./carapace-control-ui.css";
 
 /* Plugins hub page-specifics layered on the settings design language
