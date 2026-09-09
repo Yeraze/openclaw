@@ -96,6 +96,14 @@ describe("Telegram model callback loopback", () => {
         response.destroy(error instanceof Error ? error : new Error(String(error)));
       });
     });
+    // grammY reuses one keep-alive socket for answerCallbackQuery and
+    // editMessageText. Between them applySessionModelSelection loads the
+    // provider model-policy surface synchronously (several seconds through
+    // jiti in build-less checkouts such as CI), so neither side's idle timer
+    // can run until the edit is already on the wire. Node's default 5 s idle
+    // close would then reset that in-flight request; connections are retired
+    // by closeAllConnections() in the finally block instead.
+    server.keepAliveTimeout = 0;
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", resolve);
     });
