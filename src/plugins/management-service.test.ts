@@ -1,5 +1,6 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertConfigWriteAllowedInCurrentMode } from "../config/config-write-guard.js";
 import {
   configSnapshot,
   emptyMetadataSnapshot,
@@ -34,9 +35,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../config/config.js", () => ({
   assertConfigWriteAllowedInCurrentMode: (params?: { env?: NodeJS.ProcessEnv }) => {
-    if (params?.env?.OPENCLAW_NIX_MODE === "1") {
-      throw new Error("Config is managed by Nix");
-    }
+    assertConfigWriteAllowedInCurrentMode(params);
   },
   readConfigFileSnapshotForWrite: () => mocks.readConfig(),
   replaceConfigFile: (params: unknown) => mocks.replaceConfig(params),
@@ -44,6 +43,9 @@ vi.mock("../config/config.js", () => ({
 
 vi.mock("./install-persistence.js", () => ({
   persistPluginInstall: (...args: unknown[]) => mocks.persistInstall(...args),
+}));
+
+vi.mock("./install-config-mutation.js", () => ({
   resolveInstallConfigMutationPreflights: (...args: unknown[]) => mocks.preflight(...args),
   selectInstallMutationWriteOptions: (writeOptions: unknown) =>
     mocks.selectWriteOptions(writeOptions),
@@ -104,14 +106,11 @@ vi.mock("./recommended-tool-installs.js", () => ({
   listRecommendedToolInstalls: (...args: unknown[]) => mocks.recommendedInstalls(...args),
 }));
 
-const {
-  clearManagedPluginOfficialCatalogCache,
-  listManagedPlugins,
-  resolveManagedPluginIconUrl,
-  resolveManagedSetupCatalogIconUrl,
-  setManagedPluginEnabled,
-  uninstallManagedPlugin,
-} = await import("./management-service.js");
+const { clearManagedPluginOfficialCatalogCache } = await import("./management-catalog.js");
+const { listManagedPlugins, resolveManagedPluginIconSource, resolveManagedSetupCatalogIconUrl } =
+  await import("./management-service.js");
+const { setManagedPluginEnabled } = await import("./management-mutations.js");
+const { uninstallManagedPlugin } = await import("./management-uninstall.js");
 
 function mockHostedOfficialCatalog(entries: unknown[]) {
   mocks.officialCatalog.mockResolvedValue({
@@ -301,7 +300,7 @@ describe("plugin management service", () => {
     }
   });
 
-  it("projects and resolves installed manifest icons by plugin identity", async () => {
+  it("does not project or resolve installed manifest icon URLs", async () => {
     const icon = "https://cdn.example.test/workboard.svg";
     const config = {
       agents: {
@@ -313,22 +312,29 @@ describe("plugin management service", () => {
       },
     };
     const env = { HOME: "/tmp/openclaw-managed-plugin-home" };
-    mocks.metadata.mockReturnValue(metadataSnapshot({ enabled: false, icon }));
+    const metadata = metadataSnapshot({ enabled: false });
+    const manifest = metadata.byPluginId.get("workboard");
+    expect(manifest).toBeDefined();
+    if (!manifest) {
+      throw new Error("missing workboard manifest fixture");
+    }
+    metadata.byPluginId.set("workboard", Object.assign(manifest, { icon }));
+    mocks.metadata.mockReturnValue(metadata);
 
     const catalog = await listManagedPlugins({
       config,
       env,
       officialCatalog: { entries: [] },
     });
-    const resolved = await resolveManagedPluginIconUrl({
+    const resolved = await resolveManagedPluginIconSource({
       config,
       env,
       pluginId: "workboard",
-      officialCatalog: { entries: [] },
     });
 
-    expect(catalog.plugins[0]).toMatchObject({ id: "workboard", hasIcon: true });
-    expect(resolved).toBe(icon);
+    expect(catalog.plugins[0]).toMatchObject({ id: "workboard" });
+    expect(catalog.plugins[0]).not.toHaveProperty("hasIcon");
+    expect(resolved).toBeUndefined();
     expect(mocks.metadata).toHaveBeenNthCalledWith(1, {
       config,
       env,
@@ -341,7 +347,7 @@ describe("plugin management service", () => {
     });
   });
 
-  it("projects and resolves official catalog icons without exposing their URL", async () => {
+  it("does not project or resolve official catalog icon URLs", async () => {
     const icon = "https://cdn.example.test/firecrawl.svg";
     const officialCatalog = {
       entries: [
@@ -359,19 +365,42 @@ describe("plugin management service", () => {
     mocks.metadata.mockReturnValue(emptyMetadataSnapshot());
 
     const catalog = await listManagedPlugins({ config: {}, env: {}, officialCatalog });
-    const resolved = await resolveManagedPluginIconUrl({
+    const resolved = await resolveManagedPluginIconSource({
       config: {},
       env: {},
       pluginId: "firecrawl",
-      officialCatalog,
     });
 
-    expect(catalog.plugins[0]).toMatchObject({ id: "firecrawl", hasIcon: true });
+    expect(catalog.plugins[0]).toMatchObject({ id: "firecrawl" });
+    expect(catalog.plugins[0]).not.toHaveProperty("hasIcon");
     expect(catalog.plugins[0]).not.toHaveProperty("icon");
-    expect(resolved).toBe(icon);
+    expect(resolved).toBeUndefined();
   });
 
-  it("allows only manifest and bundled setup catalog icon URLs", async () => {
+  it("resolves the portable package icon", async () => {
+    const iconPath = "/tmp/workboard/assets/icon.png";
+    mocks.metadata.mockReturnValue(
+      metadataSnapshot({
+        enabled: false,
+        iconPath,
+      }),
+    );
+
+    const catalog = await listManagedPlugins({
+      config: {},
+      env: {},
+    });
+    const resolved = await resolveManagedPluginIconSource({
+      config: {},
+      env: {},
+      pluginId: "workboard",
+    });
+
+    expect(catalog.plugins[0]).toMatchObject({ id: "workboard", hasIcon: true });
+    expect(resolved).toEqual({ kind: "file", path: iconPath, rootPath: "/tmp/workboard" });
+  });
+
+  it("allows only provider-choice and bundled setup catalog icon URLs", async () => {
     const providerIcon = "https://cdn.example.test/provider.svg";
     const recommendedIcon = "https://cdn.example.test/tool.png";
     mocks.metadata.mockReturnValue(emptyMetadataSnapshot());
@@ -391,7 +420,7 @@ describe("plugin management service", () => {
     });
   });
 
-  it("omits icon capability when neither manifest nor catalog has one", async () => {
+  it("omits icon capability when the package has no local icon", async () => {
     mocks.metadata.mockReturnValue(metadataSnapshot({ enabled: false }));
 
     const catalog = await listManagedPlugins({
@@ -399,28 +428,37 @@ describe("plugin management service", () => {
       env: {},
       officialCatalog: { entries: [] },
     });
-    const resolved = await resolveManagedPluginIconUrl({
+    const resolved = await resolveManagedPluginIconSource({
       config: {},
       env: {},
       pluginId: "workboard",
-      officialCatalog: { entries: [] },
     });
 
     expect(catalog.plugins[0]).not.toHaveProperty("hasIcon");
     expect(resolved).toBeUndefined();
   });
 
-  it("refuses mutation in Nix mode before reading or writing config", async () => {
-    await expect(
-      setManagedPluginEnabled({
-        pluginId: "workboard",
-        enabled: true,
-        env: { OPENCLAW_NIX_MODE: "1" },
-      }),
-    ).rejects.toThrow("managed by Nix");
-    expect(mocks.readConfig).not.toHaveBeenCalled();
-    expect(mocks.replaceConfig).not.toHaveBeenCalled();
-  });
+  it.each(["OPENCLAW_NIX_MODE", "OPENCLAW_CONFIG_READONLY"])(
+    "refuses mutation in %s before reading or writing config",
+    async (mode) => {
+      await expect(
+        setManagedPluginEnabled({
+          pluginId: "workboard",
+          enabled: true,
+          env: { [mode]: "1" },
+        }),
+      ).rejects.toThrow(`${mode}=1`);
+      expect(mocks.readConfig).not.toHaveBeenCalled();
+      expect(mocks.replaceConfig).not.toHaveBeenCalled();
+      mocks.metadata.mockReturnValue(emptyMetadataSnapshot());
+      const catalog = await listManagedPlugins({
+        config: {},
+        env: { [mode]: "1" },
+        officialCatalog: { entries: [] },
+      });
+      expect(catalog.mutationAllowed).toBe(false);
+    },
+  );
 
   it("blocks unsupported plugin includes before config mutation", async () => {
     mocks.readConfig.mockResolvedValue(configSnapshot());
@@ -509,7 +547,7 @@ describe("plugin management service", () => {
 
     expect(mocks.replaceConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        nextConfig: {
+        sourceConfig: {
           plugins: {
             allow: ["memory-core", "workboard"],
             entries: { workboard: { enabled: true } },
@@ -555,7 +593,7 @@ describe("plugin management service", () => {
 
     expect(mocks.replaceConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        nextConfig: {
+        sourceConfig: {
           plugins: {
             allow: [],
             entries: { workboard: { enabled: true } },

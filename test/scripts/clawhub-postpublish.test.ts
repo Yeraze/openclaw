@@ -59,7 +59,7 @@ function zip(name: string, bytes: Buffer) {
   return Buffer.concat([local, fileName, bytes, central, fileName, end]);
 }
 
-function fixture(parentOnMain = false, packageId = "example") {
+function fixture(parentOnMain = false, verifierSha = sha, packageId = "example") {
   const parentRef = parentOnMain ? "main" : ref;
   const parentFullRef = parentOnMain ? "refs/heads/main" : `refs/tags/${ref}`;
   const directory = mkdtempSync(join(tmpdir(), "clawhub-postpublish-"));
@@ -212,11 +212,13 @@ function fixture(parentOnMain = false, packageId = "example") {
     [`git/ref/tags/${ref}`, { ref: `refs/tags/${ref}`, object: { type: "commit", sha } }],
     [`git/matching-refs/heads/${ref}`, []],
     [`compare/${sha}...main`, { status: "identical" }],
-    [`compare/${sha}...${sha}`, { status: "identical" }],
+    [`compare/${sha}...${verifierSha}`, { status: "identical" }],
+    [`compare/${sha}...${verifierSha}?per_page=1&page=2`, { status: "identical" }],
     ...[receiptArtifact, transactionsArtifact, packageArtifact, dispatchArtifact].map(
       (item): [string, unknown] => [`actions/artifacts/${item.id}`, item],
     ),
   ]);
+  const githubReads: string[] = [];
   const registryReads: string[] = [];
   const archiveIdentity = {
     sha256: digest(tarball),
@@ -229,6 +231,7 @@ function fixture(parentOnMain = false, packageId = "example") {
     expect(init?.method ?? "GET").toBe("GET");
     if (url.hostname === "api.github.com") {
       const path = `${url.pathname.replace(`/repos/${repository}/`, "")}${url.search}`;
+      githubReads.push(path);
       const download = /^actions\/artifacts\/(\d+)\/zip$/u.exec(path);
       if (download) {
         return new Response(new Uint8Array(archives.get(Number(download[1]))!));
@@ -236,7 +239,8 @@ function fixture(parentOnMain = false, packageId = "example") {
       if (!metadata.has(path)) {
         throw new Error(`Unexpected GitHub request: ${path}`);
       }
-      return Response.json(metadata.get(path));
+      const value = metadata.get(path);
+      return value instanceof Response ? value : Response.json(value);
     }
     expect(new Headers(init?.headers).has("authorization")).toBe(false);
     registryReads.push(url.pathname);
@@ -269,7 +273,7 @@ function fixture(parentOnMain = false, packageId = "example") {
   };
   const options = {
     event: { workflow_run: parent },
-    verifierSha: sha,
+    verifierSha,
     token: "fixture-token",
     outputDir: join(directory, "result"),
     fetchImpl,
@@ -294,6 +298,7 @@ function fixture(parentOnMain = false, packageId = "example") {
     child,
     metadata,
     archives,
+    githubReads,
     registryReads,
     transactions,
     entry,
@@ -305,7 +310,7 @@ function fixture(parentOnMain = false, packageId = "example") {
 }
 
 function preparedFixture(selectionMode = "selected", packageId = "example", runAttempt = 1) {
-  const f = fixture(false, packageId);
+  const f = fixture(false, sha, packageId);
   const candidateSha = f.transactions.identity.candidateSha;
   const producer = {
     repository,
@@ -750,6 +755,86 @@ describe("ClawHub detached postpublish verification", () => {
         `https://api.github.com/repos/${repository}/actions/runs/10/attempts/1`,
         `https://api.github.com/repos/${repository}/actions/runs/20/attempts/1`,
       ]);
+    },
+  );
+
+  it("verifies ancestry when comparison file patches exceed the response limit", async () => {
+    const verifierSha = "c".repeat(40);
+    const f = fixture(false, verifierSha);
+    const comparison = `compare/${sha}...${verifierSha}`;
+    f.metadata.set(comparison, {
+      status: "ahead",
+      files: [{ filename: "large.txt", patch: "+change\n".repeat(300_000) }],
+    });
+    f.metadata.set(`${comparison}?per_page=1&page=2`, {
+      status: "ahead",
+      commits: [{ sha: verifierSha }],
+    });
+
+    const result = await verifyClawHubPostpublish(f.options);
+    expect(result.complete).toBe(true);
+    expect(result.packages).toHaveLength(1);
+    expect(f.registryReads.length).toBeGreaterThan(0);
+    expect(f.githubReads.filter((path) => path.startsWith("compare/"))).toEqual([
+      `${comparison}?per_page=1&page=2`,
+    ]);
+  });
+
+  it.each(["identical", "ahead"])(
+    "accepts %s ancestry even when the comparison page has no commits",
+    async (status) => {
+      const verifierSha = status === "identical" ? sha : "c".repeat(40);
+      const f = fixture(false, verifierSha);
+      const comparison = `compare/${sha}...${verifierSha}`;
+      for (const path of [comparison, `${comparison}?per_page=1&page=2`]) {
+        f.metadata.set(path, { status, commits: [] });
+      }
+      const result = await verifyClawHubPostpublish(f.options);
+      expect(result.complete).toBe(true);
+      expect(result.packages).toHaveLength(1);
+      expect(f.registryReads.length).toBeGreaterThan(0);
+    },
+  );
+
+  it.each(["behind", "diverged", "unknown", undefined])(
+    "rejects %s ancestry before registry reads or completion evidence",
+    async (status) => {
+      const verifierSha = "c".repeat(40);
+      const f = fixture(false, verifierSha);
+      const comparison = `compare/${sha}...${verifierSha}`;
+      for (const path of [comparison, `${comparison}?per_page=1&page=2`]) {
+        f.metadata.set(path, { status, commits: [] });
+      }
+      await expect(verifyClawHubPostpublish(f.options)).rejects.toThrow(
+        "Parent tooling is not an ancestor of trusted verification tooling.",
+      );
+      expect(f.registryReads).toEqual([]);
+      expect(existsSync(join(f.options.outputDir, "evidence.json"))).toBe(false);
+    },
+  );
+
+  it.each([
+    {
+      label: "oversized response",
+      response: () => Response.json({ status: "ahead", message: "x".repeat(2 * 1024 * 1024) }),
+      error: "GitHub postpublish response body exceeded 2097152 bytes",
+    },
+    {
+      label: "HTTP failure",
+      response: () => new Response(null, { status: 404 }),
+      error: "GitHub postpublish read returned HTTP 404.",
+    },
+  ])(
+    "rejects a comparison $label before registry reads or evidence",
+    async ({ response, error }) => {
+      const f = fixture();
+      const comparison = `compare/${sha}...${sha}`;
+      for (const path of [comparison, `${comparison}?per_page=1&page=2`]) {
+        f.metadata.set(path, response());
+      }
+      await expect(verifyClawHubPostpublish(f.options)).rejects.toThrow(error);
+      expect(f.registryReads).toEqual([]);
+      expect(existsSync(join(f.options.outputDir, "evidence.json"))).toBe(false);
     },
   );
 

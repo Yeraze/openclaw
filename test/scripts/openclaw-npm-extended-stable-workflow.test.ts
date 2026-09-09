@@ -140,6 +140,69 @@ describe("minimal npm extended-stable workflow", () => {
     ).toBe(true);
   });
 
+  it("routes source and Tideclaw history through the trusted ancestry owner", () => {
+    const parsed = workflow(preflightWorkflowPath);
+    const sourceAncestry = step(
+      parsed.jobs?.check_openclaw_npm,
+      "Establish source ancestry with main",
+    );
+    const tideclawAncestry = step(
+      parsed.jobs?.prepare_openclaw_npm,
+      "Establish Tideclaw alpha ancestry",
+    );
+    const sourceCheck = step(
+      parsed.jobs?.check_openclaw_npm,
+      "Check source, test types, and architecture",
+    );
+    const trustedCheckout = step(
+      parsed.jobs?.check_openclaw_npm,
+      "Checkout trusted package source preflight",
+    );
+    const metadata = step(parsed.jobs?.check_dependencies_npm, "Validate release metadata").run;
+
+    expect(trustedCheckout.with?.["sparse-checkout"]).toContain(".github/actions/git-owner");
+    expect(sourceAncestry).toMatchObject({
+      env: {
+        RELEASE_ANCESTRY_MODE: "merge-base",
+        RELEASE_ANCESTRY_SOURCE_REF:
+          "${{ inputs.release_candidate_branch != '' && format('refs/heads/{0}', inputs.release_candidate_branch) || '' }}",
+        RELEASE_ANCESTRY_TARGET_REF: "refs/heads/main",
+      },
+    });
+    expect(tideclawAncestry).toMatchObject({
+      env: {
+        RELEASE_ANCESTRY_MODE: "ancestor",
+        RELEASE_ANCESTRY_TARGET_REF: "${{ github.ref }}",
+      },
+    });
+    for (const ancestry of [sourceAncestry, tideclawAncestry]) {
+      expect(ancestry.env).not.toHaveProperty("RELEASE_ANCESTRY_TOTAL_SECONDS");
+      expect(ancestry.run).toContain(
+        "python3 -I -S .release-harness/.github/actions/git-owner/owner.py",
+      );
+      expect(ancestry.run).toContain(
+        "--policy .release-harness/.github/actions/git-owner/release-ancestry.py",
+      );
+    }
+    expect(sourceCheck.run).toBe("pnpm check --include-test-types --include-architecture");
+    expect(metadata).toContain("--unshallow origin");
+    expect(metadata).toContain('"+refs/tags/v*:refs/tags/v*"');
+    const sourceSteps = parsed.jobs?.check_openclaw_npm?.steps ?? [];
+    const prepareSteps = parsed.jobs?.prepare_openclaw_npm?.steps ?? [];
+    expect(sourceSteps.indexOf(trustedCheckout)).toBeLessThan(sourceSteps.indexOf(sourceAncestry));
+    expect(sourceSteps.indexOf(sourceAncestry)).toBeLessThan(sourceSteps.indexOf(sourceCheck));
+    expect(prepareSteps.indexOf(tideclawAncestry)).toBeGreaterThan(
+      prepareSteps.findIndex(
+        (candidate) => candidate.name === "Checkout trusted package source preflight",
+      ),
+    );
+    expect(prepareSteps.indexOf(tideclawAncestry)).toBeLessThan(
+      prepareSteps.findIndex(
+        (candidate) => candidate.name === "Validate npm package source metadata",
+      ),
+    );
+  });
+
   it("adds extended-stable without adding policy or verifier contracts", () => {
     const raw = readFileSync(workflowPath, "utf8");
     const parsed = workflow();
@@ -172,11 +235,6 @@ describe("minimal npm extended-stable workflow", () => {
     expect(parsed.jobs?.preflight_openclaw_npm?.with?.use_github_hosted_runners).toBe(
       "${{ inputs.use_github_hosted_runners }}",
     );
-    for (const job of Object.values(workflow(preflightWorkflowPath).jobs ?? {})) {
-      expect(job["runs-on"]).toBe(
-        "${{ inputs.use_github_hosted_runners && 'ubuntu-24.04' || 'blacksmith-32vcpu-ubuntu-2404' }}",
-      );
-    }
   });
 
   it("binds intentional Plugin SDK release changes to the reported digest", () => {
@@ -387,7 +445,14 @@ describe("minimal npm extended-stable workflow", () => {
     });
     expect(plugins.run).toContain("--selection-mode all-publishable");
     expect(plugins.run).toContain("--npm-dist-tag extended-stable");
-    expect(plugins.run).toContain("scripts/check-plugin-npm-runtime-builds.mts");
+    expect(plugins.run).toContain(
+      'node --import "$tooling_dir/scripts/tsx.mjs" "$tooling_dir/scripts/plugin-npm-release-plan.ts"',
+    );
+    // A validation target can predate this verifier; plugin runtime qualification
+    // must run from the trusted workflow checkout while inspecting target packages.
+    expect(plugins.run).toMatch(
+      /TSX_TSCONFIG_PATH="\$tooling_dir\/tsconfig\.json" \\\n\s+node --import "\$tooling_dir\/scripts\/tsx\.mjs" "\$tooling_dir\/scripts\/check-plugin-npm-runtime-builds\.mts"/,
+    );
     expect(plugins.run).toContain("scripts/plugin-npm-publish.sh --pack");
     expect(plugins.run).toContain("OPENCLAW_PLUGIN_NPM_PACK_OUTPUT_DIR");
     expect(plugins.run).not.toContain("--publish");
@@ -433,6 +498,9 @@ describe("minimal npm extended-stable workflow", () => {
     );
     expect(verifyReleaseContents.if).toBeUndefined();
     expect(verifyReleaseContents.run).toContain('--tarball "$PREPARED_TARBALL_PATH"');
+    expect(verifyReleaseContents.run).toMatch(
+      /TSX_TSCONFIG_PATH="\$tooling_dir\/tsconfig\.json" \\\n\s+node --import "\$tooling_dir\/scripts\/tsx\.mjs" "\$tooling_dir\/scripts\/openclaw-npm-prepublish-verify\.ts"/,
+    );
 
     const save = step(preflight, "Save preflight build outputs");
     const setup = step(preflight, "Setup Node environment");

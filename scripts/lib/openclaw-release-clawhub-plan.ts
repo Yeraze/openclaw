@@ -38,6 +38,7 @@ type OpenClawReleaseClawHubPlanArgs = {
 };
 
 type OpenClawReleaseClawHubPlan = {
+  warnings: string[];
   bootstrapWorkflowSha: string;
   clawHubWorkflowRef: string;
   releasePublishBranch: string;
@@ -385,6 +386,7 @@ export async function buildOpenClawReleaseClawHubPlan(
         candidates: prepared,
         bootstrapCandidates: [],
         missingTrustedPublisher: [],
+        warnings: [],
       }
     : await collectPluginClawHubReleasePlan({
         rootDir: options.rootDir ?? resolve("."),
@@ -403,6 +405,7 @@ export async function buildOpenClawReleaseClawHubPlan(
   assertNoPackageOverlap(normalPackages, bootstrapPackages);
 
   const result = {
+    warnings: plan.warnings,
     bootstrapWorkflowSha,
     clawHubWorkflowRef: bootstrapWorkflowRef,
     releasePublishBranch,

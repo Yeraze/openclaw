@@ -61,13 +61,16 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-button-dispatch-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/release-button/dispatch.json
+          path: |
+            ${{ runner.temp }}/release-button/dispatch.json
+            ${{ runner.temp }}/release-button/dispatch.next.json
           if-no-files-found: warn
           retention-days: 30
 
   verify:
     name: Join publication and verify ClawHub downloads
     needs: publish
+    if: needs.publish.result == 'success' && needs.publish.outputs.request != ''
     runs-on: ubuntu-latest
     timeout-minutes: 150
     permissions:
@@ -118,6 +121,7 @@ jobs:
   finalize:
     name: Make the verified GitHub release visible
     needs: [publish, verify]
+    if: needs.publish.result == 'success' && needs.verify.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm-release
@@ -143,6 +147,15 @@ jobs:
           RELEASE_REQUEST: ${{ needs.publish.outputs.request }}
         run: |
           set -euo pipefail
+          printf '%s\n' "$RELEASE_REQUEST" > "$RUNNER_TEMP/release-request.json"
+          node scripts/openclaw-release-ready.mjs validate-request \
+            --request "$RUNNER_TEMP/release-request.json" --output "$RUNNER_TEMP/release-button"
+          if [[ "$RELEASE_TAG" != "$(jq -er '.inputs.tag' <<< "$RELEASE_REQUEST")" ||
+                "$SOURCE_SHA" != "$(jq -er '.sourceSha' <<< "$RELEASE_REQUEST")" ||
+                "$RELEASE_NPM_DIST_TAG" != "$(jq -er '.inputs.npm_dist_tag' <<< "$RELEASE_REQUEST")" ]]; then
+            echo 'Activation outputs differ from the retained publication request.' >&2
+            exit 1
+          fi
           actual_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)"
           if [[ "$actual_sha" != "$SOURCE_SHA" ]]; then
             echo 'Release tag moved after publication; refusing activation.' >&2
@@ -174,3 +187,62 @@ jobs:
             exit 1
           fi
           echo "Verified release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  publish_windows:
+    name: Dispatch Windows assets after activation
+    needs: [publish, finalize]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.finalize.result == 'success' && ((fromJSON(needs.publish.outputs.request).inputs.windows_node_tag || '') != '' || (fromJSON(needs.publish.outputs.request).inputs.windows_node_installer_digests || '') != '') && !contains(fromJSON(needs.publish.outputs.request).inputs.tag, '-alpha.') && !contains(fromJSON(needs.publish.outputs.request).inputs.tag, '-beta.') }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout exact Windows dispatch tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Setup trusted Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+      - name: Dispatch detached Windows promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REQUEST: ${{ needs.publish.outputs.request }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_REQUEST" > "$RUNNER_TEMP/release-request.json"
+          node scripts/openclaw-release-ready.mjs validate-request \
+            --request "$RUNNER_TEMP/release-request.json" --output "$RUNNER_TEMP/release-button"
+          RELEASE_TAG="$(jq -er '.inputs.tag' <<< "$RELEASE_REQUEST")"
+          TARGET_SHA="$(jq -er '.sourceSha' <<< "$RELEASE_REQUEST")"
+          PARENT_WORKFLOW_SHA="$(jq -er '.tooling.sha' <<< "$RELEASE_REQUEST")"
+          WINDOWS_NODE_TAG="$(jq -r '.inputs.windows_node_tag // ""' <<< "$RELEASE_REQUEST")"
+          WINDOWS_NODE_INSTALLER_DIGESTS="$(jq -r '.inputs.windows_node_installer_digests // ""' <<< "$RELEASE_REQUEST")"
+          source scripts/lib/release-publish-children.sh
+          jq -n --arg tag "$RELEASE_TAG" --arg source "$WINDOWS_NODE_TAG" \
+            --arg digests "$WINDOWS_NODE_INSTALLER_DIGESTS" \
+            '{tag: $tag, sourceTag: $source, installerDigests: $digests, state: "dispatch-failed"}' \
+            > "$RUNNER_TEMP/windows-dispatch.json"
+          verify_release_tag_target
+          CHILD_WORKFLOW_REF="$(resolve_child_workflow_ref "$GITHUB_REF")"
+          promote_windows_release_assets
+          jq --arg runId "${windows_node_run_id}" '. + {state: "dispatched", childRunId: $runId}' \
+            "$RUNNER_TEMP/windows-dispatch.json" > "$RUNNER_TEMP/windows-dispatch.next.json"
+          mv "$RUNNER_TEMP/windows-dispatch.next.json" "$RUNNER_TEMP/windows-dispatch.json"
+      - name: Record failed Windows dispatch
+        if: ${{ failure() }}
+        run: |
+          echo "::warning::Windows promotion could not be dispatched; npm and GitHub publication remain complete. Inspect this attempt before manual Windows Node Release recovery."
+          echo "- Windows Hub: dispatch failed; inspect this job before manual recovery." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Windows dispatch evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: windows-release-dispatch-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-dispatch.json
+          if-no-files-found: warn
+          retention-days: 30

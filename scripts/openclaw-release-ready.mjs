@@ -88,7 +88,15 @@ function output(name, value) {
 }
 
 function writeJson(path, value) {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  requireValue(Buffer.byteLength(text) <= MAX_MANIFEST_BYTES, "Release request exceeds its limit.");
+  writeFileSync(path, text, { flag: "wx", mode: 0o600 });
+}
+
+function replaceJson(path, value) {
+  const nextPath = path.replace(/\.json$/u, ".next.json");
+  writeJson(nextPath, value);
+  renameSync(nextPath, path);
 }
 
 function readJson(path) {
@@ -250,7 +258,7 @@ async function waitForRun(runId, attempt, workflow, tooling) {
     const run = api(`actions/runs/${runId}`);
     producer(run, workflow, tooling);
     requireValue(
-      run.run_attempt === attempt,
+      run.id === runId && run.run_attempt === attempt,
       "Release producer attempt changed; retain the original evidence and select an exact new attempt explicitly.",
     );
     if (run.status === "completed") {
@@ -296,12 +304,15 @@ function dispatch(workflow, inputs, tooling) {
     Number.isSafeInteger(result.workflow_run_id) && result.workflow_run_id > 0,
     "Dispatch response did not identify its run. Inspect Actions before dispatching again.",
   );
-  const link = `https://github.com/${REPOSITORY}/actions/runs/${result.workflow_run_id}`;
+  return result;
+}
+
+function reportDispatch(workflow, runId) {
+  const link = `https://github.com/${REPOSITORY}/actions/runs/${runId}`;
   console.log(`${workflow}: ${link}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- ${workflow}: ${link}\n`);
   }
-  return result.workflow_run_id;
 }
 
 export function validateReadyRelease(value, expected) {
@@ -470,6 +481,63 @@ async function readReady(descriptor, directory, tooling, token) {
   return validateReadyRelease(value, { sourceSha, tooling });
 }
 
+function publicationInputs(ready, resumeRunId) {
+  const effectiveResumeRunId = resumeRunId || ready.inputs.openclaw_npm_resume_run_id || "";
+  requireValue(
+    effectiveResumeRunId === "" ||
+      (/^[1-9][0-9]*$/u.test(effectiveResumeRunId) &&
+        Number.isSafeInteger(Number(effectiveResumeRunId))),
+    "openclaw_npm_resume_run_id must be a positive safe integer.",
+  );
+  return {
+    ...ready.inputs,
+    ...(resumeRunId ? { openclaw_npm_resume_run_id: resumeRunId } : {}),
+    prepared_plugins: JSON.stringify(ready.plugins),
+  };
+}
+
+async function readPublicationRequest(path, directory, tooling, token) {
+  const request = readJson(path);
+  requireValue(
+    isRecord(request) &&
+      request.schema === "openclaw.release-dispatch/v1" &&
+      request.repository === REPOSITORY &&
+      request.workflowPath === PUBLISH_WORKFLOW &&
+      request.workflowEvent === "workflow_dispatch" &&
+      request.state === "acknowledged" &&
+      Number.isSafeInteger(request.button?.runId) &&
+      request.button.runId > 0 &&
+      request.button.runAttempt === 1 &&
+      request.expectedReleaseRunAttempt === 1 &&
+      Number.isSafeInteger(request.releaseRunId) &&
+      request.releaseRunId > 0 &&
+      request.releaseRunAttempt === 1 &&
+      SHA.test(request.sourceSha) &&
+      isDeepStrictEqual(request.tooling, tooling) &&
+      (request.openclawNpmResumeRunId === null ||
+        typeof request.openclawNpmResumeRunId === "string") &&
+      isDeepStrictEqual(request.producer, {
+        repository: REPOSITORY,
+        runId: request.releaseRunId,
+        runAttempt: request.releaseRunAttempt,
+        workflowPath: PUBLISH_WORKFLOW,
+        workflowEvent: "workflow_dispatch",
+        workflowHeadBranch: tooling.ref,
+        workflowSha: tooling.sha,
+      }),
+    "Publication request is unknown, unverified, malformed, or inconsistent; do not redispatch.",
+  );
+  const ready = await readReady(request.preparedArtifact, directory, tooling, token);
+  const inputs = publicationInputs(ready, request.openclawNpmResumeRunId ?? "");
+  requireValue(
+    ready.sourceSha === request.sourceSha &&
+      isDeepStrictEqual(inputs, request.inputs) &&
+      request.openclawNpmResumeRunId === (inputs.openclaw_npm_resume_run_id ?? null),
+    "Publication request differs from the frozen readiness inputs.",
+  );
+  return request;
+}
+
 async function main() {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -533,11 +601,6 @@ async function main() {
       writeJson(requestPath, request);
     } else {
       writeJson(requestPath, request);
-      const saveAcknowledgedDispatch = () => {
-        const nextPath = join(directory, "request.next.json");
-        writeJson(nextPath, request);
-        renameSync(nextPath, requestPath);
-      };
       // Persist before either mutation, then after each acknowledged run. A null
       // ID means unconfirmed, never proof that a lost dispatch created no run.
       request.npmRunId = dispatch(
@@ -550,14 +613,16 @@ async function main() {
           trusted_publisher_preflight: "false",
         },
         tooling,
-      );
-      saveAcknowledgedDispatch();
+      ).workflow_run_id;
+      replaceJson(requestPath, request);
+      reportDispatch("plugin-npm-release.yml", request.npmRunId);
       request.clawhubRunId = dispatch(
         "plugin-clawhub-release.yml",
         { ref: sourceSha, publish_scope: "all-publishable", dry_run: "true" },
         tooling,
-      );
-      saveAcknowledgedDispatch();
+      ).workflow_run_id;
+      replaceJson(requestPath, request);
+      reportDispatch("plugin-clawhub-release.yml", request.clawhubRunId);
     }
     output("npm_run_id", String(request.npmRunId));
     output("clawhub_run_id", String(request.clawhubRunId));
@@ -650,34 +715,84 @@ async function main() {
     const ready = await readReady(descriptor, directory, tooling, token);
     // Recovery changes only the existing owner's resume selector. The parent
     // verifies its authority and canonical core bytes before starting writers.
-    const inputs = {
-      ...ready.inputs,
-      ...(resumeRunId ? { openclaw_npm_resume_run_id: resumeRunId } : {}),
-      prepared_plugins: JSON.stringify(ready.plugins),
-    };
-    const runId = dispatch("openclaw-release-publish.yml", inputs, tooling);
-    output("release_run_id", String(runId));
-    output("source_sha", ready.sourceSha);
-    output("release_tag", ready.inputs.tag);
-    output("npm_dist_tag", ready.inputs.npm_dist_tag);
+    const inputs = publicationInputs(ready, resumeRunId);
     const request = {
-      releaseRunId: runId,
-      releaseRunAttempt: 1,
+      schema: "openclaw.release-dispatch/v1",
+      repository: REPOSITORY,
+      workflowPath: PUBLISH_WORKFLOW,
+      workflowEvent: "workflow_dispatch",
+      state: "unknown",
+      button: {
+        runId: Number(process.env.GITHUB_RUN_ID),
+        runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+      },
+      expectedReleaseRunAttempt: 1,
+      releaseRunId: null,
+      releaseRunAttempt: null,
+      producer: null,
       sourceSha: ready.sourceSha,
       tooling,
       preparedArtifact: descriptor,
+      inputs,
       openclawNpmResumeRunId: inputs.openclaw_npm_resume_run_id ?? null,
     };
-    output("request", request);
-    writeJson(join(directory, "dispatch.json"), request);
+    requireValue(
+      Number.isSafeInteger(request.button.runId) && request.button.runId > 0,
+      "Publication requires an exact initiating button run.",
+    );
+    const requestPath = join(directory, "dispatch.json");
+    // A retained unknown is intentional: a crash even before POST cannot prove
+    // non-execution. Existing intent never authorizes another mutation.
+    writeJson(requestPath, request);
+    try {
+      request.releaseRunId = dispatch(
+        "openclaw-release-publish.yml",
+        inputs,
+        tooling,
+      ).workflow_run_id;
+      request.state = "unverified";
+      replaceJson(requestPath, request);
+      const run = api(`actions/runs/${request.releaseRunId}`);
+      const observed = producer(run, PUBLISH_WORKFLOW, tooling);
+      requireValue(
+        observed.runId === request.releaseRunId &&
+          observed.runAttempt === request.expectedReleaseRunAttempt,
+        "Publication acknowledgement run or attempt differs from the original dispatch.",
+      );
+      request.producer = observed;
+      request.releaseRunAttempt = observed.runAttempt;
+      request.state = "acknowledged";
+      replaceJson(requestPath, request);
+      reportDispatch("openclaw-release-publish.yml", request.releaseRunId);
+      console.log(
+        `Retained request: ${requestPath}; button ${request.button.runId}/${request.button.runAttempt}. Verify only: node scripts/openclaw-release-ready.mjs verify --request ${JSON.stringify(requestPath)}`,
+      );
+      output("release_run_id", String(request.releaseRunId));
+      output("source_sha", ready.sourceSha);
+      output("release_tag", ready.inputs.tag);
+      output("npm_dist_tag", ready.inputs.npm_dist_tag);
+      output("request", request);
+    } catch (error) {
+      console.error(
+        `Retained request: ${requestPath}; button ${request.button.runId}/${request.button.runAttempt}; publisher ${request.releaseRunId ?? "unconfirmed"}. Dispatch or handoff outcome unknown; do not redispatch. Inspect the retained request and any dispatch.next.json before manual reconciliation.`,
+      );
+      throw error;
+    }
     return;
   }
-  if (operation === "verify") {
-    const request = readJson(values.request);
-    requireValue(
-      isDeepStrictEqual(request.tooling, tooling),
-      "Publication verifier tooling mismatch.",
-    );
+  if (operation === "verify" || operation === "validate-request") {
+    const request = await readPublicationRequest(values.request, directory, tooling, token);
+    if (operation === "validate-request") {
+      const run = api(`actions/runs/${request.releaseRunId}`);
+      const observed = producer(run, PUBLISH_WORKFLOW, tooling);
+      requireValue(
+        isDeepStrictEqual(observed, request.producer) &&
+          run.status === "completed" &&
+          run.conclusion === "success",
+        "Publication request no longer identifies a successful exact publisher.",
+      );
+      return;
+    }
     const run = await waitForRun(
       request.releaseRunId,
       request.releaseRunAttempt,
@@ -694,7 +809,9 @@ async function main() {
     output("verified", "true");
     return;
   }
-  throw new Error("Expected dispatch-prepare, seal, dispatch-publish, or verify.");
+  throw new Error(
+    "Expected dispatch-prepare, seal, dispatch-publish, verify, or validate-request.",
+  );
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
