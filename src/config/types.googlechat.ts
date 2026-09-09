@@ -51,12 +51,15 @@ export type GoogleChatAccountConfig = Omit<CommonChannelMessagingConfig, "mentio
     /**
      * Typing indicator mode (default: "message").
      * - "none": No indicator
-     * - "message": Send "_<name> is typing..._" then edit with response
+     * - "message": Send "_<name> is typing..._" then edit with the final reply
+     * - "live": Send the placeholder, then edit it in place with live progress
+     *   (tool started, thinking, ...) and collapse it into the final reply. Uses
+     *   only the chat.bot scope (spaces.messages.patch); no user OAuth.
      * - "reaction": React with 👀 to user message, remove on reply
      *   NOTE: Reaction mode requires user OAuth (not supported with service account auth).
      *   If configured, falls back to message mode with a warning.
      */
-    typingIndicator?: "none" | "message" | "reaction";
+    typingIndicator?: "none" | "message" | "live" | "reaction";
   };
 
 export type GoogleChatConfig = {

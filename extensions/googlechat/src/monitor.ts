@@ -19,6 +19,7 @@ import type { ResolvedGoogleChatAccount } from "./accounts.js";
 import { downloadGoogleChatMedia, sendGoogleChatMessage } from "./api.js";
 import { maybeHandleGoogleChatApprovalCardClick } from "./approval-card-click.js";
 import type { GoogleChatAudienceType } from "./auth.js";
+import { createGoogleChatDraftStream, type GoogleChatDraftStream } from "./draft-stream.js";
 import { applyGoogleChatInboundAccessPolicy } from "./monitor-access.js";
 import { resolveGoogleChatDurableReplyOptions } from "./monitor-durable.js";
 import {
@@ -399,8 +400,11 @@ async function processMessageWithPipeline(params: {
       ? replyThreadName
       : undefined;
 
-  // Start typing indicator (message mode only, reaction mode not supported with app auth)
-  if (typingIndicator === "message") {
+  // Both "message" and "live" post the same placeholder; "live" then edits it in
+  // place with progress before the final collapse.
+  const usesPlaceholder = typingIndicator === "message" || typingIndicator === "live";
+  let draftStream: GoogleChatDraftStream | undefined;
+  if (usesPlaceholder) {
     try {
       const botName = resolveBotDisplayName({
         accountName: account.config.name,
@@ -419,6 +423,15 @@ async function processMessageWithPipeline(params: {
           requestedThreadName: typingMessageThreadName,
           deliveredThreadName: result.threadName,
         });
+        if (typingIndicator === "live") {
+          draftStream = createGoogleChatDraftStream({
+            account,
+            spaceId,
+            messageName: result.messageName,
+            threadName: result.threadName ?? typingMessageThreadName,
+            runtime,
+          });
+        }
       }
     } catch (err) {
       runtime.error?.(`Failed sending typing message: ${String(err)}`);
@@ -454,6 +467,18 @@ async function processMessageWithPipeline(params: {
               hasTypingMessage: Boolean(typingMessage),
             }),
           deliver: async (payload) => {
+            if (draftStream) {
+              // Stop live progress edits and drain the last in-flight one before
+              // the final collapse, so a late edit cannot clobber the answer. The
+              // draft stream shares the placeholder message, so hand delivery its
+              // current name (a 404 re-send may have adopted a fresh one).
+              await draftStream.stop();
+              const liveName = draftStream.messageName();
+              if (typingMessage && liveName && liveName !== typingMessage.name) {
+                typingMessage = { ...typingMessage, name: liveName };
+              }
+              draftStream = undefined;
+            }
             await deliverGoogleChatReply({
               payload,
               account,
@@ -477,6 +502,18 @@ async function processMessageWithPipeline(params: {
           },
         },
         replyPipeline: {},
+        ...(draftStream
+          ? {
+              replyOptions: {
+                onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
+                onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
+                onReasoningStream: (payload) =>
+                  draftStream?.pushReasoningProgress(payload.text || "Thinking…", {
+                    snapshot: payload.isReasoningSnapshot === true,
+                  }) ?? false,
+              },
+            }
+          : {}),
         record: {
           onRecordError: (err) => {
             runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
