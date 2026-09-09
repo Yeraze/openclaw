@@ -438,64 +438,40 @@ async function processMessageWithPipeline(params: {
     }
   }
 
-  try {
-    await core.channel.inbound.run({
-      channel: "googlechat",
-      accountId: route.accountId,
-      raw: message,
-      ...(turnAdoptionLifecycle ? { turnAdoptionLifecycle } : {}),
-      adapter: {
-        ingest: () => ({
-          id: message.name ?? spaceId,
-          timestamp: timestampMs,
-          rawText: rawBody,
-          textForAgent: rawBody,
-          textForCommands: rawBody,
-          raw: message,
-        }),
-        resolveTurn: () => ({
-          cfg: config,
-          channel: "googlechat",
-          accountId: route.accountId,
-          route: { agentId: route.agentId, sessionKey: route.sessionKey },
-          ctxPayload,
-          delivery: {
-            durable: (payload, info) =>
-              resolveGoogleChatDurableReplyOptions({
-                payload,
-                infoKind: info.kind,
-                spaceId,
-                hasTypingMessage: Boolean(typingMessage),
-              }),
-            deliver: async (payload, info) => {
-              // Intermediate deliveries (tool/block payloads) must not consume the
-              // placeholder or draft stream — those belong to the final collapse.
-              // Deliver them and leave live progress running. A missing info means
-              // the caller only distinguishes the final delivery, so treat it as final.
-              if (info && info.kind !== "final") {
-                await deliverGoogleChatReply({
-                  payload,
-                  account,
-                  spaceId,
-                  runtime,
-                  core,
-                  config,
-                  statusSink,
-                });
-                return;
-              }
-              if (draftStream) {
-                // Stop live progress edits and drain the last in-flight one before
-                // the final collapse, so a late edit cannot clobber the answer. The
-                // draft stream shares the placeholder message, so hand delivery its
-                // current name (a 404 re-send may have adopted a fresh one).
-                await draftStream.stop();
-                const liveName = draftStream.messageName();
-                if (typingMessage && liveName && liveName !== typingMessage.name) {
-                  typingMessage = { ...typingMessage, name: liveName };
-                }
-                draftStream = undefined;
-              }
+  const runParams = {
+    channel: "googlechat",
+    accountId: route.accountId,
+    raw: message,
+    ...(turnAdoptionLifecycle ? { turnAdoptionLifecycle } : {}),
+    adapter: {
+      ingest: () => ({
+        id: message.name ?? spaceId,
+        timestamp: timestampMs,
+        rawText: rawBody,
+        textForAgent: rawBody,
+        textForCommands: rawBody,
+        raw: message,
+      }),
+      resolveTurn: () => ({
+        cfg: config,
+        channel: "googlechat",
+        accountId: route.accountId,
+        route: { agentId: route.agentId, sessionKey: route.sessionKey },
+        ctxPayload,
+        delivery: {
+          durable: (payload, info) =>
+            resolveGoogleChatDurableReplyOptions({
+              payload,
+              infoKind: info.kind,
+              spaceId,
+              hasTypingMessage: Boolean(typingMessage),
+            }),
+          deliver: async (payload, info) => {
+            // Intermediate deliveries (tool/block payloads) must not consume the
+            // placeholder or draft stream — those belong to the final collapse.
+            // Deliver them and leave live progress running. A missing info means
+            // the caller only distinguishes the final delivery, so treat it as final.
+            if (info && info.kind !== "final") {
               await deliverGoogleChatReply({
                 payload,
                 account,
@@ -504,49 +480,74 @@ async function processMessageWithPipeline(params: {
                 core,
                 config,
                 statusSink,
-                typingMessage,
-                liveMode: typingIndicator === "live",
-                doneStatusText: `_${botName} is done — reply below._`,
               });
-              // Only use typing message for the final delivery
-              typingMessage = undefined;
-            },
-            onDelivered: () => {
-              statusSink?.({ lastOutboundAt: Date.now() });
-            },
-            onError: (err, info) => {
-              runtime.error?.(
-                `[${account.accountId}] Google Chat ${info.kind} reply failed: ${String(err)}`,
-              );
-            },
-          },
-          replyPipeline: {},
-          ...(draftStream
-            ? {
-                replyOptions: {
-                  // Keep core's own standalone tool-progress text messages off (we
-                  // render progress into the live placeholder), but still let the
-                  // tool lifecycle fire on non-verbose turns so onToolStart/
-                  // onItemEvent reach the draft stream instead of freezing.
-                  suppressDefaultToolProgressMessages: true,
-                  allowToolLifecycleWhenProgressHidden: true,
-                  onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
-                  onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
-                  onReasoningStream: (payload) =>
-                    draftStream?.pushReasoningProgress(payload.text || "Thinking…", {
-                      snapshot: payload.isReasoningSnapshot === true,
-                    }) ?? false,
-                },
+              return;
+            }
+            if (draftStream) {
+              // Stop live progress edits and drain the last in-flight one before
+              // the final collapse, so a late edit cannot clobber the answer. The
+              // draft stream shares the placeholder message, so hand delivery its
+              // current name (a 404 re-send may have adopted a fresh one).
+              await draftStream.stop();
+              const liveName = draftStream.messageName();
+              if (typingMessage && liveName && liveName !== typingMessage.name) {
+                typingMessage = { ...typingMessage, name: liveName };
               }
-            : {}),
-          record: {
-            onRecordError: (err) => {
-              runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
-            },
+              draftStream = undefined;
+            }
+            await deliverGoogleChatReply({
+              payload,
+              account,
+              spaceId,
+              runtime,
+              core,
+              config,
+              statusSink,
+              typingMessage,
+              liveMode: typingIndicator === "live",
+              doneStatusText: `_${botName} is done — reply below._`,
+            });
+            // Only use typing message for the final delivery
+            typingMessage = undefined;
           },
-        }),
-      },
-    });
+          onDelivered: () => {
+            statusSink?.({ lastOutboundAt: Date.now() });
+          },
+          onError: (err, info) => {
+            runtime.error?.(
+              `[${account.accountId}] Google Chat ${info.kind} reply failed: ${String(err)}`,
+            );
+          },
+        },
+        replyPipeline: {},
+        ...(draftStream
+          ? {
+              replyOptions: {
+                // Keep core's own standalone tool-progress text messages off (we
+                // render progress into the live placeholder), but still let the
+                // tool lifecycle fire on non-verbose turns so onToolStart/
+                // onItemEvent reach the draft stream instead of freezing.
+                suppressDefaultToolProgressMessages: true,
+                allowToolLifecycleWhenProgressHidden: true,
+                onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
+                onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
+                onReasoningStream: (payload) =>
+                  draftStream?.pushReasoningProgress(payload.text || "Thinking…", {
+                    snapshot: payload.isReasoningSnapshot === true,
+                  }) ?? false,
+              },
+            }
+          : {}),
+        record: {
+          onRecordError: (err) => {
+            runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
+          },
+        },
+      }),
+    },
+  };
+  try {
+    await core.channel.inbound.run(runParams);
   } finally {
     // A turn can settle without deliver ever running (silent finish, failure, or
     // a reply sent only via a message tool). Stop any still-live draft stream so
