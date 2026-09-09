@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCoreGatewayMethodDescriptors,
+  listCoreGatewayMethodNames,
   STARTUP_UNAVAILABLE_GATEWAY_METHODS,
 } from "./methods/core-descriptors.js";
 import { GATEWAY_EVENTS, listGatewayMethods } from "./server-methods-list.js";
@@ -58,7 +59,6 @@ describe("GATEWAY_EVENTS", () => {
 
 describe("listGatewayMethods", () => {
   const expectedMethodsAfterModelProbe = [
-    "models.probe",
     "migrations.memory.plan",
     "migrations.memory.apply",
     "ui.command",
@@ -165,6 +165,14 @@ describe("listGatewayMethods", () => {
   it("appends new methods after model probing without shifting older method indices", () => {
     const expectedSuffix = [
       ...expectedMethodsAfterModelProbe,
+      "canvas.document.view",
+      "plugins.controlUi.list",
+      "plugins.controlUi.reload",
+      "plugins.controlUi.report",
+      "plugins.controlUi.status",
+      "update.runs.get",
+      "update.runs.list",
+      "gateway.suspend.handoff",
       "transcripts.export",
       "transcripts.status",
       "update.report",
@@ -329,6 +337,20 @@ describe("listGatewayMethods", () => {
       "sessions.dispatch",
       "sessions.reclaim",
       ...expectedMethodsAfterModelProbe,
+      "canvas.document.view",
+      "plugins.controlUi.list",
+      "plugins.controlUi.reload",
+      "plugins.controlUi.report",
+      "plugins.controlUi.status",
+      "update.runs.get",
+      "update.runs.list",
+      "gateway.suspend.handoff",
+      "transcripts.export",
+      "transcripts.status",
+      "update.report",
+      "skills.workshop.read",
+      "session.publicShare.set",
+      "claws.monitors",
       ...pluginDiscoveryMethods,
     ];
     expect(coreMethods.slice(-expectedCoreSuffix.length)).toEqual(expectedCoreSuffix);
@@ -374,9 +396,7 @@ describe("listGatewayMethods", () => {
     expect(methods.indexOf("session.members.listEvidence")).toBe(
       methods.indexOf("diagnostics.lanes") + 1,
     );
-    expect(methods.indexOf("plugins.catalog.browse")).toBe(
-      methods.indexOf("models.authOrderSet") + 1,
-    );
+    expect(methods.indexOf("plugins.catalog.browse")).toBe(methods.indexOf("claws.monitors") + 1);
     expect(methods.indexOf("plugins.catalog.categories")).toBe(
       methods.indexOf("plugins.catalog.browse") + 1,
     );
