@@ -353,6 +353,163 @@ function messageAtoms(exchange: CacheExchange, retained: boolean): unknown[] {
   });
 }
 
+function runtimeCarriers(exchange: CacheExchange): JsonRecord[] {
+  const messages = exchange.request.messages ?? exchange.request.input;
+  return Array.isArray(messages)
+    ? messages.flatMap((message) =>
+        isRecord(message) && Array.isArray(message.content)
+          ? message.content.filter(
+              (block): block is JsonRecord =>
+                isRecord(block) &&
+                typeof block.text === "string" &&
+                hasInternalRuntimeContext(block.text),
+            )
+          : [],
+      )
+    : [];
+}
+
+function cacheReuseEvidence(exchanges: CacheExchange[], retained: boolean) {
+  return exchanges.slice(1).map((current, index) => {
+    const previous = exchanges[index]!;
+    const transientBytes = retained
+      ? 0
+      : runtimeCarriers(previous).reduce(
+          (total, carrier) => total + Buffer.byteLength(String(carrier.text)),
+          0,
+        );
+    // A removed carrier cannot be cached on the next request. Its UTF-8 byte
+    // length conservatively bounds tokens; 128 allows provider cache-block rounding.
+    return {
+      request: index + 2,
+      minimumPrefix: previous.usage.totalInput - transientBytes - 128,
+      actualPrefix: current.usage.cacheRead,
+      minimumColdGrowth: 1024,
+      actualColdGrowth: current.usage.cacheRead - exchanges[0]!.usage.cacheRead,
+      previousRequestGrowth: current.usage.cacheRead - previous.usage.cacheRead,
+    };
+  });
+}
+
+function observedUsage(value: unknown) {
+  const usage = isRecord(value) ? value : {};
+  return Object.fromEntries(
+    ["input", "output", "cacheRead", "cacheWrite", "totalTokens"].map((key) => [
+      key,
+      typeof usage[key] === "number" && Number.isSafeInteger(usage[key]) && usage[key] >= 0
+        ? usage[key]
+        : null,
+    ]),
+  );
+}
+
+function cacheMarkers(value: unknown): Array<{ contentHash: string; markerHash: string }> {
+  if (Array.isArray(value)) {
+    return value.flatMap(cacheMarkers);
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  return [
+    ...(value.cache_control === undefined
+      ? []
+      : [
+          {
+            contentHash: captureHash(withoutCacheMetadata(value)),
+            markerHash: captureHash(value.cache_control),
+          },
+        ]),
+    ...Object.entries(value)
+      .filter(([key]) => key !== "cache_control")
+      .flatMap(([, item]) => cacheMarkers(item)),
+  ];
+}
+
+/** Diagnostic collection cannot turn partial captures or failed assertions into passing proof. */
+export async function collectCacheFailureEvidence(
+  reader: DebugProxyCaptureReader | undefined,
+  captureSession: string,
+  model: PromptCacheModel,
+  messages: JsonRecord[],
+  scenario: PromptCacheScenario,
+) {
+  const retained = model.provider === "anthropic" && bindsClaudeThinkingPrefix({ id: model.id });
+  let events: JsonRecord[] = [];
+  let captureReadFailed = false;
+  try {
+    events = reader?.getSessionEvents(captureSession, CACHE_CAPTURE_EVENT_LIMIT) ?? [];
+  } catch {
+    captureReadFailed = true;
+  }
+  const rows = events
+    .filter((row) => providerApi(row) !== undefined)
+    .toSorted(
+      (left, right) => Number(left.ts) - Number(right.ts) || Number(left.id) - Number(right.id),
+    );
+  const requests = rows.filter((row) => row.kind === "request");
+  const decoded: CacheExchange[] = [];
+  const observations = [];
+  const assistants = messages.filter((message) => message.role === "assistant");
+  for (const [index, request] of requests.slice(0, CACHE_SCENARIO_REQUEST_LIMIT).entries()) {
+    const responses = rows.filter(
+      (row) => row.kind === "response" && row.flowId === request.flowId,
+    );
+    let exchange: CacheExchange | undefined;
+    try {
+      [exchange] = await decodeCacheExchanges([request, ...responses], reader!, model);
+    } catch {
+      // Provider/parser errors may contain private data. Report validity, never their payload.
+    }
+    if (exchange) {
+      decoded.push(exchange);
+    }
+    observations.push({
+      request: index + 1,
+      api: providerApi(request),
+      model: exchange?.model ?? null,
+      status: typeof responses[0]?.status === "number" ? responses[0].status : null,
+      terminalComplete: exchange !== undefined,
+      requestHash: exchange?.requestHash ?? null,
+      responseHash: exchange?.responseHash ?? null,
+      rawUsage: exchange?.usage ?? null,
+      normalizedUsage: observedUsage(assistants[index]?.usage),
+      markers: exchange ? cacheMarkers(exchange.request) : [],
+      carriers: exchange
+        ? runtimeCarriers(exchange).map((carrier) => ({
+            contentHash: captureHash(withoutCacheMetadata(carrier)),
+            markerHash:
+              carrier.cache_control === undefined ? null : captureHash(carrier.cache_control),
+          }))
+        : [],
+    });
+  }
+  const complete =
+    !captureReadFailed &&
+    events.length < CACHE_CAPTURE_EVENT_LIMIT &&
+    requests.length > 0 &&
+    decoded.length === requests.length &&
+    rows.filter((row) => row.kind === "response").length === requests.length &&
+    !rows.some((row) => row.kind === "error" || row.kind === "retry-link");
+  return {
+    lifecycle: retained ? "retained" : "transient",
+    requestCount: captureReadFailed || !reader ? null : requests.length,
+    responseCount:
+      captureReadFailed || !reader ? null : rows.filter((row) => row.kind === "response").length,
+    transportErrorCount: rows.filter((row) => row.kind === "error" || row.kind === "retry-link")
+      .length,
+    omittedRequestCount: Math.max(0, requests.length - observations.length),
+    captureReadFailed,
+    captureLimitReached: events.length >= CACHE_CAPTURE_EVENT_LIMIT,
+    captureComplete: complete,
+    requests: observations,
+    reuse: complete ? cacheReuseEvidence(decoded, retained) : [],
+    firstReadReuse:
+      complete && scenario === "dependent-reads" && decoded.length >= 3
+        ? { minimum: 1024, actual: decoded[2]!.usage.cacheRead - decoded[1]!.usage.cacheRead }
+        : null,
+  };
+}
+
 /** Compare the meaningful conversation, not a best-of hit rate or a system-only cache hit. */
 export function verifyCacheConversation(
   exchanges: CacheExchange[],
@@ -398,18 +555,7 @@ export function verifyCacheConversation(
     }
   }
   if (model.provider === "anthropic") {
-    const carriers = exchanges.map((exchange) =>
-      (exchange.request.messages as JsonRecord[]).flatMap((message) =>
-        Array.isArray(message.content)
-          ? message.content.filter(
-              (block) =>
-                isRecord(block) &&
-                typeof block.text === "string" &&
-                hasInternalRuntimeContext(block.text),
-            )
-          : [],
-      ),
-    );
+    const carriers = exchanges.map(runtimeCarriers);
     if (carriers[0]!.length === 0) {
       throw new Error("Runtime carrier was not exercised.");
     }
@@ -421,40 +567,13 @@ export function verifyCacheConversation(
       throw new Error("Runtime carrier did not follow the model's replay lifecycle.");
     }
   }
-  for (let index = 1; index < exchanges.length; index += 1) {
-    const previous = exchanges[index - 1]!;
-    const current = exchanges[index]!;
-    const messages = previous.request.messages ?? previous.request.input;
-    const transientBytes =
-      retained || !Array.isArray(messages)
-        ? 0
-        : messages.reduce(
-            (total, message) =>
-              total +
-              (isRecord(message) && Array.isArray(message.content)
-                ? message.content.reduce(
-                    (bytes, block) =>
-                      bytes +
-                      (isRecord(block) &&
-                      typeof block.text === "string" &&
-                      hasInternalRuntimeContext(block.text)
-                        ? Buffer.byteLength(block.text)
-                        : 0),
-                    0,
-                  )
-                : 0),
-            0,
-          );
-    // A removed carrier cannot be cached on the next request. Its UTF-8 byte
-    // length is a conservative token upper bound; retained history has no such
-    // deduction. Allow 128 tokens for provider cache-block rounding, not a ratio.
-    const requiredPrefix = previous.usage.totalInput - transientBytes - 128;
+  for (const reuse of cacheReuseEvidence(exchanges, retained)) {
     if (
-      current.usage.cacheRead < requiredPrefix ||
-      current.usage.cacheRead - first.usage.cacheRead < 1024
+      reuse.actualPrefix < reuse.minimumPrefix ||
+      reuse.actualColdGrowth < reuse.minimumColdGrowth
     ) {
       throw new Error(
-        `Request ${index + 1} did not reuse the preceding conversation beyond the cold cache baseline.`,
+        `Request ${reuse.request} did not reuse the preceding conversation beyond the cold cache baseline.`,
       );
     }
   }

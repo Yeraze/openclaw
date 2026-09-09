@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
-import { afterEach, describe, it, vi } from "vitest";
+import { afterAll, afterEach, describe, it, vi } from "vitest";
 import { createQaGatewayChild, type QaGatewayChild } from "../../../../extensions/qa-lab/api.js";
 import { createDebugProxyCaptureReader } from "../../../../src/proxy-capture/store-readonly.js";
-import { stopQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
-import { useAutoCleanupTempDirTracker } from "../../../helpers/temp-dir.js";
+import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 import {
   CACHE_SCENARIO_REQUEST_LIMIT,
+  collectCacheFailureEvidence,
   readCacheCaptureRows,
   reconcileCacheUsage,
   verifyCacheConversation,
@@ -22,15 +23,42 @@ import {
   gatewayPromptCacheModels,
 } from "./gateway-prompt-cache-contract.js";
 import {
+  assertGatewayPromptCacheStopped,
   CACHE_SCENARIO_TIMEOUT_MS as SCENARIO_TIMEOUT_MS,
   gatewayPromptCacheOptions,
+  stopGatewayPromptCacheFixture,
 } from "./gateway-prompt-cache-fixture.js";
 
 const ENABLED =
   process.env.OPENCLAW_LIVE_TEST === "1" && process.env.OPENCLAW_LIVE_CACHE_RUNTIME === "1";
 const MODELS = gatewayPromptCacheModels(process.env.OPENCLAW_LIVE_CACHE_RUNTIME_PROFILE);
-const tempDirs = useAutoCleanupTempDirTracker(afterEach);
+const outcomes = new Map<
+  string,
+  { outcome: "passed" | "failed"; phase: string; elapsedMs: number }
+>();
 afterEach(() => vi.unstubAllEnvs());
+afterAll(() => {
+  if (ENABLED) {
+    console.log(
+      JSON.stringify({
+        proof: "gateway-prompt-cache-matrix",
+        cases: MODELS.flatMap((model) =>
+          GATEWAY_PROMPT_CACHE_SCENARIOS.map((scenario) => {
+            const id = gatewayPromptCacheCaseId(model, scenario);
+            return {
+              case: id,
+              ...(outcomes.get(id) ?? {
+                outcome: "not-run",
+                phase: "not-started",
+                elapsedMs: null,
+              }),
+            };
+          }),
+        ),
+      }),
+    );
+  }
+});
 
 function requireObject(value: unknown, label: string): Record<string, unknown> {
   if (!isRecord(value)) {
@@ -113,13 +141,9 @@ describe("Gateway HTTP prompt cache", () => {
         gatewayPromptCacheCaseId(model, scenario),
         { timeout: SCENARIO_TIMEOUT_MS + 90_000 },
         async () => {
-          const apiKeyName = model.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
-          if (!process.env[apiKeyName]?.trim()) {
-            throw new Error(
-              `Runtime cache proof requires ${apiKeyName}; missing auth is not a pass.`,
-            );
-          }
-          const taskRoot = tempDirs.make("openclaw-prompt-cache-");
+          const startedAt = Date.now();
+          const caseId = gatewayPromptCacheCaseId(model, scenario);
+          const taskRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-prompt-cache-"));
           // Setup reads the parent environment before applying runtimeEnvPatch. Never
           // import an operator's endpoint overrides or subscription credentials.
           vi.stubEnv(
@@ -144,162 +168,241 @@ describe("Gateway HTTP prompt cache", () => {
           let monitor: Promise<void> | undefined;
           const stopMonitor = new AbortController();
           let budgetFailure: Error | undefined;
-          let proofFailure: unknown;
+          let budgetStop: ReturnType<typeof owner.stop> | undefined;
           let deadline: ReturnType<typeof setTimeout> | undefined;
+          let reader: ReturnType<typeof createDebugProxyCaptureReader> | undefined;
+          let messages: Record<string, unknown>[] = [];
+          let phase = "auth";
+          let outcome: "passed" | "failed" = "failed";
+          let verifiedPrefix: string | undefined;
+          let runtimeVerified = false;
           try {
-            gateway = await owner.start(gatewayPromptCacheOptions(model, taskRoot, captureSession));
-            if (gateway.runtimeEnv.OPENCLAW_DEBUG_PROXY_URL) {
-              throw new Error("Cache proof must not route through a debug proxy.");
-            }
-            const reader = createDebugProxyCaptureReader({ env: gateway.runtimeEnv });
-            const rows = () => readCacheCaptureRows(reader, captureSession);
-            // Capture is asynchronous and observes requests after response headers.
-            // Stop at the observed ceiling; any overrun remains a failed, fully counted run.
-            const stopForBudget = (reason: string) => {
-              budgetFailure ??= new Error(reason);
-              void gateway?.stop();
-            };
-            deadline = setTimeout(
-              () => stopForBudget("Runtime cache scenario time budget exceeded."),
-              SCENARIO_TIMEOUT_MS,
-            );
-            monitor = (async () => {
-              while (!stopMonitor.signal.aborted) {
-                try {
-                  if (
-                    rows().filter((row) => row.kind === "request").length >=
-                    CACHE_SCENARIO_REQUEST_LIMIT
-                  ) {
-                    stopForBudget("Runtime cache scenario request budget reached.");
-                    return;
-                  }
-                  await delay(50, undefined, { signal: stopMonitor.signal });
-                } catch {
-                  if (!stopMonitor.signal.aborted) {
-                    stopForBudget("Runtime cache capture monitor failed.");
-                  }
-                  return;
+            await runQaGatewayFixture(
+              async () => {
+                const apiKeyName =
+                  model.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+                if (!process.env[apiKeyName]?.trim()) {
+                  throw new Error(
+                    `Runtime cache proof requires ${apiKeyName}; missing auth is not a pass.`,
+                  );
                 }
-              }
-            })();
-            const catalog = requireObject(await gateway.call("models.list", {}), "models.list");
-            if (
-              !Array.isArray(catalog.models) ||
-              !catalog.models.some(
-                (entry) =>
-                  isRecord(entry) && entry.provider === model.provider && entry.id === model.id,
-              )
-            ) {
-              throw new Error(
-                "The exact runtime cache model is absent from the canonical catalog.",
-              );
-            }
-            const sessionKey = `agent:qa:cache-${randomUUID()}`;
-            const firstPath = "manifest-a.txt";
-            const secondPath = `manifest-${randomUUID()}.txt`;
-            const answer = `CACHE_ANSWER_${randomUUID().replaceAll("-", "")}`;
-            const acknowledgement = `CACHE_READY_${randomUUID().replaceAll("-", "")}`;
-            let prompt = `${manifest("user seed")}\n`;
-            if (scenario === "dependent-reads") {
-              await fs.writeFile(
-                path.join(gateway.workspaceDir, firstPath),
-                `${manifest("tool result")}\nRead the next file at ${secondPath} to find the answer.\n`,
-                { mode: 0o600 },
-              );
-              await fs.writeFile(
-                path.join(gateway.workspaceDir, secondPath),
-                `The answer is ${answer}.\n`,
-                { mode: 0o600 },
-              );
-              prompt += `Read ${firstPath} in full. It names the only next file to read. Read that file, then reply with only its answer. Do not list files or use other tools.`;
-            } else {
-              prompt += `Remember this manifest. Do not use tools. Reply with exactly ${acknowledgement}.`;
-            }
-            const first = await sendTurn(gateway, sessionKey, prompt);
-            const firstExchanges = await waitForCacheExchanges(
-              rows,
-              reader,
-              model,
-              scenario === "dependent-reads" ? 3 : 1,
-            );
-            reconcileCacheUsage(firstExchanges, first.messages);
-            if (first.reply !== (scenario === "dependent-reads" ? answer : acknowledgement)) {
-              throw new Error("The first turn did not return the expected visible answer.");
-            }
-            if (scenario === "dependent-reads") {
-              verifyDependentReadHistory(
-                first.messages,
-                firstPath,
-                secondPath,
-                answer,
-                gateway.workspaceDir,
-              );
-            }
-            const beforeFollowup = firstExchanges.length;
-            const second = await sendTurn(
-              gateway,
-              sessionKey,
-              "Without calling tools, repeat your previous final answer exactly.",
-            );
-            const exchanges = await waitForCacheExchanges(rows, reader, model, beforeFollowup + 1);
-            const persistedUsage = reconcileCacheUsage(exchanges, second.messages);
-            if (second.reply !== first.reply) {
-              throw new Error("The warm followup did not use the same persisted conversation.");
-            }
-            const sessions = requireObject(
-              await gateway.call("sessions.list", {}),
-              "sessions.list",
-            );
-            const session = Array.isArray(sessions.sessions)
-              ? sessions.sessions.find((entry) => isRecord(entry) && entry.key === sessionKey)
-              : undefined;
-            if (
-              !isRecord(session) ||
-              !isRecord(session.agentRuntime) ||
-              session.agentRuntime.id !== "openclaw" ||
-              session.model !== model.id ||
-              session.modelProvider !== model.provider
-            ) {
-              throw new Error("Persisted session used an unexpected runtime or model.");
-            }
-            if (budgetFailure) {
-              throw budgetFailure;
-            }
-            const proof = verifyCacheConversation(exchanges, model, scenario, beforeFollowup);
-            if (scenario === "dependent-reads") {
-              if (
-                JSON.stringify(exchanges[0]!.request).includes(secondPath) ||
-                !JSON.stringify(exchanges[1]!.request).includes(secondPath) ||
-                !JSON.stringify(exchanges[2]!.request).includes(answer)
-              ) {
-                throw new Error(
-                  "Provider requests did not contain the ordered, dependent tool results.",
+                phase = "startup";
+                gateway = await owner.start(
+                  gatewayPromptCacheOptions(model, taskRoot, captureSession),
                 );
-              }
-            } else if (first.messages.some((entry) => entry.role === "toolResult")) {
-              throw new Error("Text-only cache scenario unexpectedly used a tool.");
-            }
-            // Raw prompts, file paths, API response ids and the capture database stay private.
-            console.log(
-              JSON.stringify({
-                proof: "gateway-prompt-cache",
-                case: gatewayPromptCacheCaseId(model, scenario),
-                runtime: session.agentRuntime.id,
-                transport: "http-sse",
-                persistedUsage,
-                ...proof,
-              }),
+                if (gateway.runtimeEnv.OPENCLAW_DEBUG_PROXY_URL) {
+                  throw new Error("Cache proof must not route through a debug proxy.");
+                }
+                const captureReader = createDebugProxyCaptureReader({ env: gateway.runtimeEnv });
+                reader = captureReader;
+                const rows = () => readCacheCaptureRows(captureReader, captureSession);
+                // Capture is asynchronous and observes requests after response headers.
+                // Stop at the observed ceiling; any overrun remains a failed, fully counted run.
+                const stopForBudget = (reason: string) => {
+                  budgetFailure ??= new Error(reason);
+                  // Stop spending immediately, but retain capture until diagnostics are emitted.
+                  budgetStop ??= owner.stop({ keepTemp: true });
+                };
+                deadline = setTimeout(
+                  () => stopForBudget("Runtime cache scenario time budget exceeded."),
+                  SCENARIO_TIMEOUT_MS,
+                );
+                monitor = (async () => {
+                  while (!stopMonitor.signal.aborted) {
+                    try {
+                      if (
+                        rows().filter((row) => row.kind === "request").length >=
+                        CACHE_SCENARIO_REQUEST_LIMIT
+                      ) {
+                        stopForBudget("Runtime cache scenario request budget reached.");
+                        return;
+                      }
+                      await delay(50, undefined, { signal: stopMonitor.signal });
+                    } catch {
+                      if (!stopMonitor.signal.aborted) {
+                        stopForBudget("Runtime cache capture monitor failed.");
+                      }
+                      return;
+                    }
+                  }
+                })();
+                phase = "model";
+                const catalog = requireObject(await gateway.call("models.list", {}), "models.list");
+                if (
+                  !Array.isArray(catalog.models) ||
+                  !catalog.models.some(
+                    (entry) =>
+                      isRecord(entry) && entry.provider === model.provider && entry.id === model.id,
+                  )
+                ) {
+                  throw new Error(
+                    "The exact runtime cache model is absent from the canonical catalog.",
+                  );
+                }
+                const sessionKey = `agent:qa:cache-${randomUUID()}`;
+                const firstPath = "manifest-a.txt";
+                const secondPath = `manifest-${randomUUID()}.txt`;
+                const answer = `CACHE_ANSWER_${randomUUID().replaceAll("-", "")}`;
+                const acknowledgement = `CACHE_READY_${randomUUID().replaceAll("-", "")}`;
+                let prompt = `${manifest("user seed")}\n`;
+                if (scenario === "dependent-reads") {
+                  await fs.writeFile(
+                    path.join(gateway.workspaceDir, firstPath),
+                    `${manifest("tool result")}\nRead the next file at ${secondPath} to find the answer.\n`,
+                    { mode: 0o600 },
+                  );
+                  await fs.writeFile(
+                    path.join(gateway.workspaceDir, secondPath),
+                    `The answer is ${answer}.\n`,
+                    { mode: 0o600 },
+                  );
+                  prompt += `Read ${firstPath} in full. It names the only next file to read. Read that file, then reply with only its answer. Do not list files or use other tools.`;
+                } else {
+                  prompt += `Remember this manifest. Do not use tools. Reply with exactly ${acknowledgement}.`;
+                }
+                phase = "first-turn";
+                const first = await sendTurn(gateway, sessionKey, prompt);
+                messages = first.messages;
+                phase = "first-turn-capture";
+                const firstExchanges = await waitForCacheExchanges(
+                  rows,
+                  captureReader,
+                  model,
+                  scenario === "dependent-reads" ? 3 : 1,
+                );
+                phase = "accounting";
+                reconcileCacheUsage(firstExchanges, first.messages);
+                phase = "sequence";
+                if (first.reply !== (scenario === "dependent-reads" ? answer : acknowledgement)) {
+                  throw new Error("The first turn did not return the expected visible answer.");
+                }
+                if (scenario === "dependent-reads") {
+                  verifyDependentReadHistory(
+                    first.messages,
+                    firstPath,
+                    secondPath,
+                    answer,
+                    gateway.workspaceDir,
+                  );
+                }
+                const beforeFollowup = firstExchanges.length;
+                phase = "followup";
+                const second = await sendTurn(
+                  gateway,
+                  sessionKey,
+                  "Without calling tools, repeat your previous final answer exactly.",
+                );
+                messages = second.messages;
+                phase = "followup-capture";
+                const exchanges = await waitForCacheExchanges(
+                  rows,
+                  captureReader,
+                  model,
+                  beforeFollowup + 1,
+                );
+                phase = "accounting";
+                reconcileCacheUsage(exchanges, second.messages);
+                phase = "sequence";
+                if (second.reply !== first.reply) {
+                  throw new Error("The warm followup did not use the same persisted conversation.");
+                }
+                phase = "runtime";
+                const sessions = requireObject(
+                  await gateway.call("sessions.list", {}),
+                  "sessions.list",
+                );
+                const session = Array.isArray(sessions.sessions)
+                  ? sessions.sessions.find((entry) => isRecord(entry) && entry.key === sessionKey)
+                  : undefined;
+                if (
+                  !isRecord(session) ||
+                  !isRecord(session.agentRuntime) ||
+                  session.agentRuntime.id !== "openclaw" ||
+                  session.model !== model.id ||
+                  session.modelProvider !== model.provider
+                ) {
+                  throw new Error("Persisted session used an unexpected runtime or model.");
+                }
+                runtimeVerified = true;
+                if (budgetFailure) {
+                  phase = "budget";
+                  throw budgetFailure;
+                }
+                phase = "sequence";
+                if (scenario === "dependent-reads") {
+                  if (
+                    JSON.stringify(exchanges[0]!.request).includes(secondPath) ||
+                    !JSON.stringify(exchanges[1]!.request).includes(secondPath) ||
+                    !JSON.stringify(exchanges[2]!.request).includes(answer)
+                  ) {
+                    throw new Error(
+                      "Provider requests did not contain the ordered, dependent tool results.",
+                    );
+                  }
+                } else if (first.messages.some((entry) => entry.role === "toolResult")) {
+                  throw new Error("Text-only cache scenario unexpectedly used a tool.");
+                }
+                phase = "cache";
+                verifiedPrefix = verifyCacheConversation(
+                  exchanges,
+                  model,
+                  scenario,
+                  beforeFollowup,
+                ).prefixHash;
+              },
+              async () => {
+                clearTimeout(deadline);
+                stopMonitor.abort();
+                await monitor;
+                if (budgetStop) {
+                  assertGatewayPromptCacheStopped(await budgetStop);
+                }
+              },
+              async () => {
+                // Emit on both success and failure, before the owner can delete private capture.
+                const evidence = await collectCacheFailureEvidence(
+                  reader,
+                  captureSession,
+                  model,
+                  messages,
+                  scenario,
+                );
+                if (verifiedPrefix && !evidence.captureComplete) {
+                  phase = "evidence";
+                }
+                console.log(
+                  JSON.stringify({
+                    proof: "gateway-prompt-cache",
+                    case: caseId,
+                    outcome: verifiedPrefix && evidence.captureComplete ? "passed" : "failed",
+                    phase: budgetFailure ? "budget" : phase,
+                    elapsedMs: Date.now() - startedAt,
+                    model: `${model.provider}/${model.id}`,
+                    runtime: runtimeVerified ? "openclaw" : null,
+                    transport: "http-sse",
+                    verifiedPrefix: verifiedPrefix ?? null,
+                    ...evidence,
+                  }),
+                );
+                if (verifiedPrefix && !evidence.captureComplete) {
+                  throw new Error("Cache diagnostic capture is incomplete.");
+                }
+              },
+              async () => {
+                if (verifiedPrefix && phase === "cache") {
+                  phase = "cleanup";
+                }
+                await stopGatewayPromptCacheFixture(owner, taskRoot);
+              },
             );
-          } catch (error) {
-            proofFailure = error;
+            outcome = "passed";
+            phase = "complete";
           } finally {
-            clearTimeout(deadline);
-            stopMonitor.abort();
-            await monitor;
-            await stopQaGatewayFixture(owner);
-          }
-          if (proofFailure) {
-            throw proofFailure;
+            outcomes.set(caseId, {
+              outcome,
+              phase: budgetFailure ? "budget" : phase,
+              elapsedMs: Date.now() - startedAt,
+            });
           }
         },
       );

@@ -1,10 +1,15 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   INTERNAL_RUNTIME_CONTEXT_BEGIN,
   INTERNAL_RUNTIME_CONTEXT_END,
 } from "../../../../src/agents/internal-runtime-context.js";
+import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 import {
   cacheRequestsComplete,
+  collectCacheFailureEvidence,
   decodeCacheExchanges,
   decodeCacheResponse,
   readCacheCaptureRows,
@@ -20,6 +25,10 @@ import {
   gatewayPromptCacheModels,
   validateGatewayPromptCacheAssertions,
 } from "./gateway-prompt-cache-contract.js";
+import {
+  assertGatewayPromptCacheStopped,
+  stopGatewayPromptCacheFixture,
+} from "./gateway-prompt-cache-fixture.js";
 
 const sonnet = gatewayPromptCacheModels()[1]!;
 const fable = gatewayPromptCacheModels()[2]!;
@@ -480,5 +489,302 @@ describe("runtime cache matrix contract", () => {
       true,
     );
     expect(() => gatewayPromptCacheModels("first-available")).toThrow("profile");
+  });
+});
+
+describe("cache failure evidence and cleanup", () => {
+  function captured(exchanges: CacheExchange[]) {
+    return exchanges.flatMap((exchange, index) => [
+      {
+        id: index * 2,
+        kind: "request",
+        flowId: `private-flow-${index}`,
+        path: "/v1/messages",
+        host: "api.anthropic.com",
+        method: "POST",
+        dataText: JSON.stringify({ model: sonnet.id, stream: true, ...exchange.request }),
+      },
+      {
+        id: index * 2 + 1,
+        kind: "response",
+        flowId: `private-flow-${index}`,
+        path: "/v1/messages",
+        status: 200,
+        contentType: "text/event-stream",
+        dataText:
+          sse("message_start", {
+            message: {
+              id: `private-response-${index}`,
+              model: sonnet.id,
+              usage: {
+                input_tokens: exchange.usage.input,
+                output_tokens: 0,
+                cache_read_input_tokens: exchange.usage.cacheRead,
+                cache_creation_input_tokens: exchange.usage.cacheWrite,
+              },
+            },
+          }) +
+          sse("message_delta", {
+            delta: { stop_reason: "end_turn" },
+            usage: { output_tokens: exchange.usage.output },
+          }) +
+          sse("message_stop", {}),
+      },
+    ]);
+  }
+
+  it("retains raw and normalized evidence for a real cache assertion failure without private text", async () => {
+    const exchanges = conversation(true);
+    expect(() => verifyCacheConversation(exchanges, sonnet, "text-followup", 1)).toThrow(
+      "breakpoint",
+    );
+    const rows = captured(exchanges);
+    const evidence = await collectCacheFailureEvidence(
+      { ...reader, getSessionEvents: () => rows },
+      "private-session",
+      sonnet,
+      [{ role: "assistant", usage: { cacheRead: 0, cacheWrite: 0, secret: "private-usage" } }],
+      "text-followup",
+    );
+    expect(evidence).toMatchObject({
+      captureComplete: true,
+      requestCount: 2,
+      lifecycle: "transient",
+      requests: [
+        {
+          rawUsage: { cacheWrite: 7950 },
+          normalizedUsage: { cacheWrite: 0, input: null },
+          carriers: [
+            {
+              contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+              markerHash: expect.any(String),
+            },
+          ],
+        },
+        {
+          rawUsage: { cacheRead: 7950 },
+        },
+      ],
+      reuse: [{ request: 2, actualPrefix: 7950, minimumColdGrowth: 1024 }],
+    });
+    expect(evidence.reuse[0]!.minimumPrefix).toBeGreaterThan(7000);
+    const output = JSON.stringify(evidence);
+    for (const privateValue of [
+      "private-session",
+      "private-flow",
+      "private-response",
+      "private-usage",
+      "unique long user seed",
+      "turn one",
+    ]) {
+      expect(output).not.toContain(privateValue);
+    }
+  });
+
+  it("reports failed continuations and the first read growth instead of only the final cache hit", async () => {
+    const exchanges = [
+      conversation()[0]!,
+      conversation()[0]!,
+      conversation()[0]!,
+      conversation()[1]!,
+    ];
+    const evidence = await collectCacheFailureEvidence(
+      { ...reader, getSessionEvents: () => captured(exchanges) },
+      "session",
+      sonnet,
+      [],
+      "dependent-reads",
+    );
+    expect(evidence.reuse.map((entry) => entry.actualPrefix)).toEqual([0, 0, 7950]);
+    expect(evidence.firstReadReuse).toEqual({ minimum: 1024, actual: 0 });
+  });
+
+  it("reports incomplete and unreadable capture as unavailable, never complete zero-usage proof", async () => {
+    const rows = captured(conversation()).slice(0, 3);
+    const partial = await collectCacheFailureEvidence(
+      { ...reader, getSessionEvents: () => rows },
+      "session",
+      sonnet,
+      [],
+      "text-followup",
+    );
+    expect(partial).toMatchObject({
+      captureComplete: false,
+      requestCount: 2,
+      responseCount: 1,
+      requests: [{ terminalComplete: true }, { terminalComplete: false, rawUsage: null }],
+      reuse: [],
+    });
+    const failed = await collectCacheFailureEvidence(
+      {
+        ...reader,
+        getSessionEvents: () => {
+          throw new Error("private database path");
+        },
+      },
+      "session",
+      sonnet,
+      [],
+      "text-followup",
+    );
+    expect(failed).toMatchObject({ captureReadFailed: true, captureComplete: false });
+    expect(JSON.stringify(failed)).not.toContain("private database path");
+  });
+
+  it("marks request and capture truncation explicitly", async () => {
+    const rows = captured(Array.from({ length: 9 }, () => conversation()[0]!));
+    const evidence = await collectCacheFailureEvidence(
+      { ...reader, getSessionEvents: () => rows },
+      "session",
+      sonnet,
+      [],
+      "text-followup",
+    );
+    expect(evidence).toMatchObject({
+      requestCount: 9,
+      omittedRequestCount: 1,
+      captureComplete: false,
+    });
+    const overflow = await collectCacheFailureEvidence(
+      { ...reader, getSessionEvents: () => Array(512).fill({ kind: "unknown" }) },
+      "session",
+      sonnet,
+      [],
+      "text-followup",
+    );
+    expect(overflow).toMatchObject({ captureLimitReached: true, captureComplete: false });
+  });
+
+  it.each(["never-spawned", "confirmed-stopped"] as const)(
+    "removes an empty parent after %s",
+    async (process) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+      await stopGatewayPromptCacheFixture({ stop: async () => ({ process, errors: [] }) }, root);
+      await expect(fs.stat(root)).rejects.toMatchObject({ code: "ENOENT" });
+    },
+  );
+
+  it.each(["unconfirmed", "confirmed-stopped"] as const)(
+    "retains the parent and original assertion when %s cleanup fails",
+    async (process) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+      const original = new Error("cache invariant failed");
+      const cleanup = new Error("stop failed");
+      try {
+        const failure = await runQaGatewayFixture(
+          async () => {
+            throw original;
+          },
+          () =>
+            stopGatewayPromptCacheFixture(
+              { stop: async () => ({ process, errors: [cleanup] }) },
+              root,
+            ),
+        ).catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(AggregateError);
+        expect((failure as AggregateError).errors[0]).toBe(original);
+        expect((failure as AggregateError).errors[1].errors).toContain(cleanup);
+        expect((await fs.stat(root)).isDirectory()).toBe(true);
+      } finally {
+        await fs.rm(root, { recursive: true });
+      }
+    },
+  );
+
+  it("preserves owner-retained child artifacts even after a confirmed stop", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+    try {
+      await fs.mkdir(path.join(root, "retained-child"));
+      await stopGatewayPromptCacheFixture(
+        { stop: async () => ({ process: "confirmed-stopped", errors: [] }) },
+        root,
+      );
+      expect(await fs.readdir(root)).toEqual(["retained-child"]);
+    } finally {
+      await fs.rm(root, { recursive: true });
+    }
+  });
+
+  it.each([
+    { process: "unconfirmed", diagnostic: false },
+    { process: "unconfirmed", diagnostic: true },
+    { process: "confirmed-stopped", diagnostic: true },
+  ] as const)(
+    "preserves early budget-stop failure after final cleanup succeeds: $process/$diagnostic",
+    async ({ process, diagnostic }) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+      const original = new Error("request budget reached");
+      const cleanup = new Error("early stop failed");
+      const budgetStop = Promise.resolve({
+        process,
+        errors: diagnostic ? [cleanup] : [],
+      });
+      let reported = false;
+      try {
+        const failure = await runQaGatewayFixture(
+          async () => {
+            throw original;
+          },
+          async () => assertGatewayPromptCacheStopped(await budgetStop),
+          () => {
+            reported = true;
+          },
+          () =>
+            stopGatewayPromptCacheFixture(
+              { stop: async () => ({ process: "confirmed-stopped", errors: [] }) },
+              root,
+            ),
+        ).catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(AggregateError);
+        expect((failure as AggregateError).errors[0]).toBe(original);
+        expect((failure as AggregateError).errors[1]).toBeInstanceOf(AggregateError);
+        expect((failure as AggregateError).errors[1].errors).toEqual(diagnostic ? [cleanup] : []);
+        expect(reported).toBe(true);
+        await expect(fs.stat(root)).rejects.toMatchObject({ code: "ENOENT" });
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("retains state when stop is unconfirmed even without diagnostic errors", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+    try {
+      await expect(
+        stopGatewayPromptCacheFixture(
+          { stop: async () => ({ process: "unconfirmed", errors: [] }) },
+          root,
+        ),
+      ).rejects.toThrow("retained");
+      expect((await fs.stat(root)).isDirectory()).toBe(true);
+    } finally {
+      await fs.rm(root, { recursive: true });
+    }
+  });
+
+  it("preserves the original assertion and state when stop itself rejects", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cache-cleanup-test-"));
+    const original = new Error("cache assertion");
+    const cleanup = new Error("stop rejected");
+    try {
+      const failure = await runQaGatewayFixture(
+        async () => {
+          throw original;
+        },
+        () =>
+          stopGatewayPromptCacheFixture(
+            {
+              stop: async () => {
+                throw cleanup;
+              },
+            },
+            root,
+          ),
+      ).catch((error: unknown) => error);
+      expect((failure as AggregateError).errors).toEqual([original, cleanup]);
+      expect((await fs.stat(root)).isDirectory()).toBe(true);
+    } finally {
+      await fs.rm(root, { recursive: true });
+    }
   });
 });
