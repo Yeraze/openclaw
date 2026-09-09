@@ -179,13 +179,13 @@ describe("renderInstalledPlugins", () => {
     expect(visiblePluginIds(container)).toHaveLength(16);
     expect(container.querySelector('input[type="search"]')).toBeNull();
 
-    const back = expectDefined(
+    const hide = expectDefined(
       [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-        button.textContent?.includes("Back"),
+        button.textContent?.includes("Hide"),
       ),
-      "back button",
+      "hide button",
     );
-    back.click();
+    hide.click();
     expect(container.querySelector('input[type="search"]')).toBeNull();
     expect(visiblePluginIds(container)).toHaveLength(12);
   });
