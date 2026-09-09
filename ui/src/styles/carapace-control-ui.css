@@ -187,7 +187,7 @@
   line-height: 1.2;
   text-decoration: none;
   touch-action: manipulation;
-  cursor: pointer;
+  cursor: var(--cursor-action);
   transition:
     background var(--oc-duration-fast) var(--oc-ease-out),
     border-color var(--oc-duration-fast) var(--oc-ease-out),
@@ -306,7 +306,7 @@ html[data-theme-resolved="light"] .oc-action-secondary:hover {
   line-height: 1;
   white-space: nowrap;
   touch-action: manipulation;
-  cursor: pointer;
+  cursor: var(--cursor-action);
   transition:
     background var(--oc-duration-fast) var(--oc-ease-out),
     color var(--oc-duration-fast) var(--oc-ease-out),
