@@ -48,6 +48,7 @@ Harden a deployment:
 Expose and operate:
 
 - [Gateway exposure runbook](/gateway/security/exposure-runbook) - Pre-flight and rollback checklist before exposing the Gateway beyond loopback.
+- [Trusted proxy auth](/gateway/trusted-proxy-auth) - Running the Gateway behind a reverse proxy that supplies the operator identity.
 - [Rate limiting](/gateway/security/rate-limiting) - Every Gateway rate limit: lockouts, throttles, caps, and cooldowns.
 - [Operator incident response](/gateway/security/operator-incident-response) - Contain, rotate, audit, and collect evidence after a suspected compromise.
 
