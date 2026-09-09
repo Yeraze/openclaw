@@ -374,7 +374,7 @@ and ComfyUI support 1.
     `openai.outputCompression` applies to JPEG/WebP outputs and is ignored
     for PNG outputs.
 
-    The top-level `background` hint is provider-neutral and currently maps
+    The top-level `background` hint is provider-neutral and maps
     to the same OpenAI `background` request field when the OpenAI provider
     is selected. Providers that do not declare background support return
     it in `ignoredOverrides` instead of receiving the unsupported parameter.
@@ -481,7 +481,7 @@ and ComfyUI support 1.
     }
     ```
 
-    Krea 2 currently returns one image per request. Prefer `aspectRatio` for
+    Krea 2 returns one image per request. Prefer `aspectRatio` for
     Krea; OpenClaw maps `size` to the closest supported Krea aspect ratio and
     rejects `resolution` for Krea rather than dropping it. Use `fal.creativity`
     when you want a native Krea creativity level:

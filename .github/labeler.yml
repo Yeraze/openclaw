@@ -60,6 +60,7 @@
       - any-glob-to-any-file:
           - "extensions/feishu/**"
           - "docs/channels/feishu.md"
+          - "docs/channels/feishu/**"
 "channel: googlechat":
   - changed-files:
       - any-glob-to-any-file:
@@ -364,6 +365,7 @@
           - "docs/cli/sandbox.md"
           - "docs/gateway/sandbox*.md"
           - "docs/install/docker.md"
+          - "docs/install/docker/**"
           - "docs/tools/multi-agent-sandbox-tools.md"
 
 "deploy: cloudflare":
