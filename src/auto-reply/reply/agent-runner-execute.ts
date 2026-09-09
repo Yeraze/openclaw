@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
+import { readCurrentTurnReplyCompletion } from "../../agents/current-turn-reply-completion.js";
 import { prepareGitCoauthorAttribution } from "../../agents/git-coauthor-attribution.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
@@ -391,6 +392,9 @@ export async function executePreparedReplyAgentRun(
       sessionStore: activeSessionStore,
       replyOperation,
     });
+    if (readCurrentTurnReplyCompletion(runOutcome)) {
+      return returnWithQueuedFollowupDrain(undefined);
+    }
   }
   if (operationSuperseded) {
     return { text: SILENT_REPLY_TOKEN };

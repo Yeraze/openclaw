@@ -13,6 +13,10 @@ import type {
 import { peekSessionMcpRuntime } from "../../agents/agent-bundle-mcp-manager-api.js";
 import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
 import {
+  copyCurrentTurnReplyCompletion,
+  readCurrentTurnReplyCompletion,
+} from "../../agents/current-turn-reply-completion.js";
+import {
   classifyFailoverReason,
   isContextOverflowError,
 } from "../../agents/embedded-agent-helpers.js";
@@ -385,6 +389,9 @@ async function executeAgentTurnInternalLoop(
       terminalRunFailed = cycle.terminalRunFailed;
       break;
     } catch (err) {
+      if (readCurrentTurnReplyCompletion(err)) {
+        throw err;
+      }
       if (err instanceof LiveSessionModelSwitchError) {
         liveModelSwitchRetries += 1;
       }
@@ -702,7 +709,10 @@ async function executeAgentTurnOutcome(params: AgentTurnParams): Promise<AgentTu
   } catch (error) {
     const abortReason = resolveReplyOperationAbortReason(executionParams.replyOperation, error);
     if (abortReason) {
-      return { runId, outcome: { kind: "aborted", reason: abortReason, ...completedCompaction() } };
+      return copyCurrentTurnReplyCompletion(error, {
+        runId,
+        outcome: { kind: "aborted", reason: abortReason, ...completedCompaction() },
+      });
     }
     throw error;
   }

@@ -8,6 +8,7 @@ import {
   buildAgentHookContextIdentityFields,
 } from "../../../plugins/hook-agent-context.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
+import { copyCurrentTurnReplyCompletion } from "../../current-turn-reply-completion.js";
 import { isCloudCodeAssistFormatError } from "../../embedded-agent-helpers.js";
 import type { subscribeEmbeddedAgentSession } from "../../embedded-agent-subscribe.js";
 import { INCOMPLETE_ASSISTANT_STREAM_RE } from "../../failover/message-patterns.js";
@@ -382,6 +383,7 @@ export function completeEmbeddedAttemptResult(
     yieldDetected: state.yieldDetected || undefined,
   };
   const resultEvidence = { ...result, yieldDetected: state.yieldDetected };
+  copyCurrentTurnReplyCompletion(input.prepared.toolBase.currentTurnReplyCompletion, result);
   // The coarse messaging flag was never terminal evidence at this boundary.
   const { didSendViaMessagingTool: _coarseDelivery, ...terminalEvidence } = resultEvidence;
   const hasTerminalOutput = hasAttemptTerminalState(terminalEvidence);

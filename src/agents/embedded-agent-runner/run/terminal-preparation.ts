@@ -4,6 +4,7 @@ import { estimateAggregateUsageCost } from "../../../utils/usage-format.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
 import type { AgentRunTerminalReceipt } from "../../agent-run-terminal-receipt.js";
 import type { AuthProfileStore } from "../../auth-profiles.js";
+import { copyCurrentTurnReplyCompletion } from "../../current-turn-reply-completion.js";
 import type { PreparedProviderFailoverOwner } from "../../failover/provider-patterns.js";
 import { getCoreTtsAttemptResultMediaUrls } from "../../tools/tts-tool-result-provenance.js";
 import type { NormalizedUsage, UsageLike } from "../../usage.js";
@@ -169,7 +170,7 @@ export function prepareEmbeddedRunTerminal(input: {
     .toSorted();
   successfulToolNames.push(...missingNestedToolNames);
   Object.assign(agentMeta, {
-    terminalReceipt: {
+    terminalReceipt: copyCurrentTurnReplyCompletion(attempt, {
       runId: runParams.runId,
       sessionId: input.sessionIdUsed,
       turnId: terminalTurnId?.trim() || runParams.runId,
@@ -185,7 +186,7 @@ export function prepareEmbeddedRunTerminal(input: {
         reportedModelRef.provider !== input.provider ||
         reportedModelRef.model !== input.model ||
         responseModel !== input.model,
-    } satisfies Omit<AgentRunTerminalReceipt, "terminalDisposition">,
+    } satisfies Omit<AgentRunTerminalReceipt, "terminalDisposition">),
   });
   // A yielded attempt ends before message_end. Its aborted tool-call assistant,
   // not an earlier completed cycle, owns paused-turn classification.
