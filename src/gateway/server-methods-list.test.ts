@@ -336,6 +336,7 @@ describe("listGatewayMethods", () => {
       "sessions.search",
       "sessions.dispatch",
       "sessions.reclaim",
+      "models.probe",
       ...expectedMethodsAfterModelProbe,
       "canvas.document.view",
       "plugins.controlUi.list",
