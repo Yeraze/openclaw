@@ -15,13 +15,16 @@ import {
   getCurrentActiveNodeContext,
 } from "../infra/active-node-context.js";
 import { findGitRoot } from "../infra/git-root.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { parseCronRunScopeSuffix } from "../sessions/session-key-utils.js";
 import { formatDateStamp, resolveUserTimezone } from "./date-time.js";
+import { resolveGitCoauthorAttribution } from "./git-coauthor-attribution.js";
 import { resolveAgentIdentity } from "./identity.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 
 const MAX_RUNTIME_AGENT_NAME_CHARS = 128;
 const MAX_RUNTIME_SESSION_URL_CHARS = 512;
+const log = createSubsystemLogger("agents/system-prompt");
 
 type RuntimeInfoInput = {
   agentId?: string;
@@ -29,6 +32,7 @@ type RuntimeInfoInput = {
   sessionKey?: string;
   sessionId?: string;
   sessionUrl?: string;
+  gitCoauthorTrailers?: string[];
   host: string;
   os: string;
   arch: string;
@@ -52,7 +56,7 @@ type SystemPromptRuntimeParams = {
 export function buildSystemPromptParams(params: {
   config?: OpenClawConfig;
   agentId?: string;
-  runtime: Omit<RuntimeInfoInput, "agentId" | "agentName" | "sessionUrl">;
+  runtime: Omit<RuntimeInfoInput, "agentId" | "agentName" | "sessionUrl" | "gitCoauthorTrailers">;
   workspaceDir?: string;
   cwd?: string;
   preparedRepoRoot?: string | null;
@@ -73,6 +77,18 @@ export function buildSystemPromptParams(params: {
           exactKey: true,
         })
       : undefined;
+  let gitCoauthorTrailers: string[] | undefined;
+  if (params.config && params.agentId && params.runtime.sessionKey && runId === undefined) {
+    try {
+      gitCoauthorTrailers = resolveGitCoauthorAttribution({
+        config: params.config,
+        agentId: params.agentId,
+        sessionKey: params.runtime.sessionKey,
+      })?.trailers;
+    } catch (error) {
+      log.warn("failed to resolve session Git co-authors", { error });
+    }
+  }
   return {
     runtimeInfo: {
       agentId: params.agentId,
@@ -81,6 +97,7 @@ export function buildSystemPromptParams(params: {
           ? resolveRuntimeAgentName(params.config, params.agentId)
           : undefined,
       ...params.runtime,
+      gitCoauthorTrailers,
       // Published links must be externally usable and bounded before entering model context.
       sessionUrl:
         sessionUrl?.startsWith("https://") && sessionUrl.length <= MAX_RUNTIME_SESSION_URL_CHARS
