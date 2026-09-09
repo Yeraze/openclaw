@@ -468,11 +468,13 @@ async function processMessageWithPipeline(params: {
               hasTypingMessage: Boolean(typingMessage),
             }),
           deliver: async (payload: ReplyPayload, info: { kind: string } | undefined) => {
-            // Intermediate deliveries (tool/block payloads) must not consume the
-            // placeholder or draft stream — those belong to the final collapse.
-            // Deliver them and leave live progress running. A missing info means
-            // the caller only distinguishes the final delivery, so treat it as final.
-            if (info && info.kind !== "final") {
+            // In live mode, intermediate deliveries (tool/block payloads) must
+            // not consume the placeholder or draft stream — those belong to the
+            // final collapse. Deliver them and leave live progress running. Only
+            // live mode runs a draft stream, so gate on it to leave "message"
+            // mode's first-delivery placeholder handling untouched. A missing
+            // info means the caller only distinguishes the final delivery.
+            if (draftStream && info && info.kind !== "final") {
               await deliverGoogleChatReply({
                 payload,
                 account,

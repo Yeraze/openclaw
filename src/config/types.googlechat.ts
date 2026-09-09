@@ -53,8 +53,10 @@ export type GoogleChatAccountConfig = Omit<CommonChannelMessagingConfig, "mentio
      * - "none": No indicator
      * - "message": Send "_<name> is typing..._" then edit with the final reply
      * - "live": Send the placeholder, then edit it in place with live progress
-     *   (tool started, thinking, ...) and collapse it into the final reply. Uses
-     *   only the chat.bot scope (spaces.messages.patch); no user OAuth.
+     *   (tool started, thinking, ...). At turn end, edit the placeholder to a
+     *   terminal "done" status and post the answer as a new message, so Google
+     *   Chat notifies the user (an in-place edit does not). Uses only the
+     *   chat.bot scope (spaces.messages.patch); no user OAuth.
      * - "reaction": React with 👀 to user message, remove on reply
      *   NOTE: Reaction mode requires user OAuth (not supported with service account auth).
      *   If configured, falls back to message mode with a warning.

@@ -155,6 +155,9 @@ export async function deliverGoogleChatReply(params: {
   // answer as new messages, so Google Chat notifies the user the reply is ready.
   // An in-place edit would not fire a notification.
   if (liveMode && typingMessage && doneStatusText?.trim()) {
+    // The done-status edit is cosmetic. Never let it block the answer: on any
+    // failure (throttling, transient, or a 404 gone message) log and continue
+    // so the final reply still posts as a new, notifying message.
     try {
       await updateGoogleChatMessage({
         account,
@@ -162,9 +165,6 @@ export async function deliverGoogleChatReply(params: {
         text: doneStatusText.trim(),
       });
     } catch (error) {
-      if (!(error instanceof GoogleChatApiError) || error.status !== 404) {
-        throw error;
-      }
       runtime.error?.(`Google Chat done-status update failed: ${String(error)}`);
     }
     typingMessage = undefined;
