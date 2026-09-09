@@ -4,8 +4,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Bot } from "grammy";
+import { Bot, HttpError } from "grammy";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import { extractErrorCode, readErrorName } from "openclaw/plugin-sdk/error-runtime";
 import { listSessionEntries } from "openclaw/plugin-sdk/session-store-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultTelegramBotDeps, type TelegramBotDeps } from "./bot-deps.js";
@@ -140,6 +141,20 @@ describe("Telegram model callback loopback", () => {
 
       const callbackSteps: string[] = [];
       const bot = new Bot(TOKEN, { botInfo: telegramBotInfoForTest, client: { apiRoot } });
+      const apiFailures: Array<{
+        method: string;
+        name: string;
+        code: string | undefined;
+      }> = [];
+      bot.api.config.use(async (previous, method, payload, signal) => {
+        try {
+          return await previous(method, payload, signal);
+        } catch (error) {
+          const cause = error instanceof HttpError ? error.error : error;
+          apiFailures.push({ method, name: readErrorName(cause), code: extractErrorCode(cause) });
+          throw error;
+        }
+      });
       const telegramDeps = {
         ...defaultTelegramBotDeps,
         buildModelsProviderData: async (): ReturnType<
@@ -242,7 +257,7 @@ describe("Telegram model callback loopback", () => {
         modelOverrideSource: "user",
         liveModelSwitchPending: true,
       });
-      expect(requests.at(-1)?.payload.text).toContain(
+      expect(requests.at(-1)?.payload.text, JSON.stringify(apiFailures)).toContain(
         `Model changed to <b>${PROVIDER}/${MODEL}</b>`,
       );
     } finally {
