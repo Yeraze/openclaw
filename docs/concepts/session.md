@@ -343,4 +343,4 @@ Preview any maintenance run with `openclaw sessions cleanup --dry-run`.
 - [Session pruning](/concepts/session-pruning)
 - [Session tools](/concepts/session-tool)
 - [Command queue](/concepts/queue)
-- [Multi-agent sandbox and tools](/tools/multi-agent-sandbox-tools) — how session visibility is limited per agent
+- [Multi-agent sandbox and tools](/tools/multi-agent-sandbox-tools) - how session visibility is limited per agent

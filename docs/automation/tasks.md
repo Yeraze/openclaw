@@ -447,5 +447,5 @@ flow content into the generic decision-fact table.
 - [Heartbeat](/gateway/heartbeat) - periodic main-session turns
 - [Automations](/automation/cron-jobs) - scheduling background work
 - [Task Flow](/automation/taskflow) - flow orchestration above tasks
-- [Sub-agents](/tools/subagents) — running a task on a spawned child agent
-- [Music generation](/tools/music-generation) — a long-running generation a task can drive
+- [Sub-agents](/tools/subagents) - running a task on a spawned child agent
+- [Music generation](/tools/music-generation) - a long-running generation a task can drive
