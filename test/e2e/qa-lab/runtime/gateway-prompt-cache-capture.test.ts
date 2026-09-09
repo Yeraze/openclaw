@@ -269,6 +269,7 @@ describe("raw cache stream evidence", () => {
       } catch (error) {
         return error;
       }
+      return undefined;
     })();
     expect(failure).toBeInstanceOf(CacheProofStopError);
     expect(failure).toMatchObject({ phase });
