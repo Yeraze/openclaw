@@ -63,9 +63,11 @@ export function withManagedPluginCache<
   return (params) => withPluginCache(getManagedPluginCache(params.metadata), () => run(params));
 }
 
-/** Clear the process-stable hosted catalog snapshot after an explicit owner reload. */
-export function clearManagedPluginOfficialCatalogCache(): void {
-  getManagedPluginCache().officialCatalog = undefined;
+/** Clear process-stable catalog snapshots after an explicit owner reload. */
+export function clearManagedPluginCatalogCache(): void {
+  const cache = getManagedPluginCache();
+  cache.officialCatalog = undefined;
+  cache.pluginVersionCategories = undefined;
 }
 
 function mergeCatalogMetadata(
