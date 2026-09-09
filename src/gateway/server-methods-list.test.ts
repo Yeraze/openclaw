@@ -139,13 +139,6 @@ describe("listGatewayMethods", () => {
     "transcripts.list",
     "transcripts.get",
     "models.authOrderSet",
-    "canvas.document.view",
-    "plugins.controlUi.list",
-    "plugins.controlUi.reload",
-    "plugins.controlUi.report",
-    "plugins.controlUi.status",
-    "update.runs.get",
-    "update.runs.list",
   ];
   const pluginDiscoveryMethods = [
     "plugins.catalog.browse",
