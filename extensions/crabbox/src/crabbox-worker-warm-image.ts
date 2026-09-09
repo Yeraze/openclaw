@@ -16,6 +16,7 @@ import {
 } from "./crabbox-worker-timeouts.js";
 import {
   createCheckpointCommands,
+  CrabboxCheckpointCreateError,
   parseCheckpointAvailability,
   parseForkedCheckpoint,
   parseCreatedCheckpoint,
@@ -611,9 +612,11 @@ export function createCrabboxWarmImageManager(dependencies: {
             await retireImage(context, key, replacement);
           }
         } catch (error) {
+          const notSubmitted =
+            creating && CrabboxCheckpointCreateError.wasNotSubmitted(error, context);
           if (claimed && key) {
             try {
-              if (creating) {
+              if (creating && !notSubmitted) {
                 openStore().update(key, (current) =>
                   current?.operation?.type === "capture" && current.operation.id === captureId
                     ? { ...current, operation: { ...current.operation, phase: "uncertain" } }
@@ -626,7 +629,9 @@ export function createCrabboxWarmImageManager(dependencies: {
               // Keep persisted ownership recoverable; physical lease cleanup still belongs to stop.
             }
           }
-          if (preparing) {
+          // Non-submission releases only image uncertainty. Source rollback may
+          // have failed, so provisioning must still fail and clean up its lease.
+          if (preparing || notSubmitted) {
             throw error;
           }
           warnOnce(
