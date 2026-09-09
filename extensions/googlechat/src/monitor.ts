@@ -416,11 +416,13 @@ async function processGoogleChatEvent(
               };
             },
             deliver: async (payload, info) => {
-              // Intermediate deliveries (tool/block payloads) must not consume the
-              // placeholder or draft stream — those belong to the final collapse.
-              // Deliver them and leave live progress running. A missing info means
-              // the caller only distinguishes the final delivery, so treat it as final.
-              const usesTypingMessage = !info || info.kind === "final";
+              // In live mode, intermediate deliveries (tool/block payloads) must
+              // not consume the placeholder or draft stream — those belong to the
+              // final collapse. Deliver them and leave live progress running. Only
+              // live mode runs a draft stream, so gate on it to leave "message"
+              // mode's first-delivery placeholder handling untouched. A missing
+              // info means the caller only distinguishes the final delivery.
+              const usesTypingMessage = !(draftStream && info && info.kind !== "final");
               if (usesTypingMessage && draftStream) {
                 // Stop live progress edits and drain the last in-flight one before
                 // the final collapse, so a late edit cannot clobber the answer. The
@@ -536,6 +538,9 @@ async function processGoogleChatEvent(
               // An in-place edit would not fire a notification.
               if (typingIndicator === "live" && deliveryTypingMessage) {
                 typingMessage = undefined;
+                // The done-status edit is cosmetic. Never let it block the answer: on any
+                // failure (throttling, transient, or a 404 gone message) log and continue
+                // so the final reply still posts as a new, notifying message.
                 try {
                   await updateGoogleChatMessage({
                     account,
@@ -543,9 +548,6 @@ async function processGoogleChatEvent(
                     text: `_${botName} is done — reply below._`,
                   });
                 } catch (error) {
-                  if (!(error instanceof GoogleChatApiError) || error.status !== 404) {
-                    throw error;
-                  }
                   runtime.error?.(`Google Chat done-status update failed: ${String(error)}`);
                 }
                 deliveryTypingMessage = undefined;
