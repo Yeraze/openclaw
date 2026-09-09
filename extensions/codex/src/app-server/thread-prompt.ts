@@ -1,5 +1,4 @@
 import {
-  buildCredentialSafetyPrompt,
   buildDelegationGuidanceSection,
   buildUiPresentationPrompt,
   buildSkillWorkshopPromptSection,
@@ -38,7 +37,6 @@ export function buildDeveloperInstructions(
   options: { dynamicTools?: readonly CodexDynamicToolSpec[] } = {},
 ): string {
   const deferredToolNames = new Set<string>();
-  let secretsToolName: string | undefined;
   let showWidgetToolName: string | undefined;
   let dashboardToolName: string | undefined;
   let portalToolName: string | undefined;
@@ -61,9 +59,6 @@ export function buildDeveloperInstructions(
       const qualifiedName = spec.type === "namespace" ? `${spec.name}.${name}` : name;
       if (tool.deferLoading === true && name) {
         deferredToolNames.add(name);
-      }
-      if (name === "secrets" && params.disableTools !== true) {
-        secretsToolName ??= qualifiedName;
       }
       if (name === "show_widget") {
         showWidgetToolName ??= qualifiedName;
@@ -138,7 +133,6 @@ export function buildDeveloperInstructions(
     params.disableTools !== true && params.promptMode !== "minimal" && params.promptMode !== "none"
       ? buildUiPresentationPrompt({ showWidgetToolName, dashboardToolName, portalToolName })
       : undefined,
-    buildCredentialSafetyPrompt(secretsToolName),
     nativeCommandGuidance,
     params.extraSystemPrompt,
   ];
