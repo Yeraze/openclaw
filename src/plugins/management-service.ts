@@ -69,18 +69,6 @@ import {
   buildPluginDependencyStatus,
   projectPluginDependencyHealth,
 } from "./status-dependencies-core.js";
-import { setPluginEnabledInConfig } from "./toggle-config.js";
-import { collectClawPluginUninstallWarnings } from "./uninstall-claw-references.js";
-import {
-  prepareConfigForDisabledPluginSet,
-  recordPluginPackageUninstallPlan,
-} from "./uninstall-package-plan.js";
-import {
-  applyPluginUninstallDirectoryRemoval,
-  formatUninstallActionLabels,
-  planPluginUninstall,
-  pluginUninstallTargetExists,
-} from "./uninstall.js";
 
 function resolveManagedPluginState(params: {
   enabled: boolean;

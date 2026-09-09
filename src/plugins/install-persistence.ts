@@ -28,7 +28,7 @@ import {
   isPluginManifestInstallOwnerAmbiguous,
   resolvePluginManifestInstallOwner,
 } from "./manifest-install-owner.js";
-import { loadPluginManifestRegistryCore, type PluginManifestRecord } from "./manifest-registry.js";
+import { loadPluginManifestRegistryCore } from "./manifest-registry.js";
 import { safeRealpathSync } from "./path-safety.js";
 import { createPluginCache, withPluginCache } from "./plugin-cache.js";
 import {
