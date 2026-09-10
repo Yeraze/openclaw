@@ -317,7 +317,7 @@ async function processGoogleChatEvent(
       : agent?.identity?.name?.trim() || "OpenClaw";
   }
   let draftStream: GoogleChatDraftStream | undefined;
-  if (usesPlaceholder) {
+  const sendTypingPlaceholder = async (): Promise<void> => {
     try {
       const result = await sendGoogleChatMessage({
         account,
@@ -331,22 +331,75 @@ async function processGoogleChatEvent(
           requestedThreadName: effectiveReplyThreadName,
           deliveredThreadName: result.threadName,
         });
-        if (typingIndicator === "live") {
-          draftStream = createGoogleChatDraftStream({
-            account,
-            spaceId,
-            messageName: result.messageName,
-            threadName: result.threadName ?? effectiveReplyThreadName,
-            runtime,
-          });
-        }
       }
     } catch (err) {
       runtime.error?.(`Failed sending typing message: ${String(err)}`);
     }
+  };
+  // A top-level placeholder keeps any 404 re-send top-level, where the answer posts.
+  const startLiveStream = (placeholder: GoogleChatTypingMessage): void => {
+    draftStream = createGoogleChatDraftStream({
+      account,
+      spaceId,
+      messageName: placeholder.name,
+      threadName: placeholder.placement === "thread" ? placeholder.deliveredThreadName : undefined,
+      runtime,
+    });
+  };
+  if (usesPlaceholder) {
+    await sendTypingPlaceholder();
+    if (typingMessage && typingIndicator === "live") {
+      startLiveStream(typingMessage);
+    }
   }
 
+  // Stop live progress edits and drain the in-flight one so a late edit cannot
+  // clobber a later write to the placeholder, or re-send one that was deleted. A
+  // 404 re-send may have replaced the placeholder and its thread, so adopt what
+  // the stream last wrote to.
+  const retireDraftStream = async (): Promise<void> => {
+    const stream = draftStream;
+    if (!stream) {
+      return;
+    }
+    draftStream = undefined;
+    try {
+      await stream.stop();
+    } catch (err) {
+      runtime.error?.(`googlechat: failed stopping live status stream: ${String(err)}`);
+    }
+    const liveName = stream.messageName();
+    const liveThread = stream.deliveredThreadName();
+    if (typingMessage && liveName && liveName !== typingMessage.name) {
+      typingMessage = { ...typingMessage, name: liveName };
+    }
+    if (
+      typingMessage?.placement === "thread" &&
+      liveThread &&
+      liveThread !== typingMessage.deliveredThreadName
+    ) {
+      typingMessage = { ...typingMessage, deliveredThreadName: liveThread };
+    }
+  };
+
+  // A queued followup drains this invocation's retained callbacks after its
+  // immediate run returned and retired the stream. Resume progress on the
+  // placeholder the deferred turn kept, so it is not orphaned beside a second
+  // one; post a fresh placeholder only if an earlier answer consumed it.
+  const startQueuedLiveStream = async (): Promise<void> => {
+    if (typingIndicator !== "live" || draftStream) {
+      return;
+    }
+    if (!typingMessage) {
+      await sendTypingPlaceholder();
+    }
+    if (typingMessage) {
+      startLiveStream(typingMessage);
+    }
+  };
+
   const cleanupTypingMessage = async () => {
+    await retireDraftStream();
     const placeholder = typingMessage;
     typingMessage = undefined;
     if (!placeholder) {
@@ -423,27 +476,8 @@ async function processGoogleChatEvent(
               // mode's first-delivery placeholder handling untouched. A missing
               // info means the caller only distinguishes the final delivery.
               const usesTypingMessage = !(draftStream && info && info.kind !== "final");
-              if (usesTypingMessage && draftStream) {
-                // Stop live progress edits and drain the last in-flight one before
-                // the final collapse, so a late edit cannot clobber the answer. The
-                // draft stream shares the placeholder message, so hand delivery its
-                // current name (a 404 re-send may have adopted a fresh one).
-                await draftStream.stop();
-                const liveName = draftStream.messageName();
-                if (typingMessage && liveName && liveName !== typingMessage.name) {
-                  typingMessage = { ...typingMessage, name: liveName };
-                }
-                const liveThread = draftStream.deliveredThreadName();
-                // A 404 re-send may have landed the placeholder in a fresh thread;
-                // follow it so the done status and answer stay together.
-                if (
-                  typingMessage?.placement === "thread" &&
-                  liveThread &&
-                  liveThread !== typingMessage.deliveredThreadName
-                ) {
-                  typingMessage = { ...typingMessage, deliveredThreadName: liveThread };
-                }
-                draftStream = undefined;
+              if (usesTypingMessage) {
+                await retireDraftStream();
               }
               const normalizedPayload = normalizeGoogleChatReplyTarget({
                 payload,
@@ -604,7 +638,7 @@ async function processGoogleChatEvent(
             },
           },
           replyPipeline: {},
-          ...(draftStream
+          ...(typingIndicator === "live"
             ? {
                 replyOptions: {
                   // Keep core's own standalone tool-progress text messages off (we
@@ -613,6 +647,11 @@ async function processGoogleChatEvent(
                   // onItemEvent reach the draft stream instead of freezing.
                   suppressDefaultToolProgressMessages: true,
                   allowToolLifecycleWhenProgressHidden: true,
+                  // A queued followup reuses these retained callbacks after the
+                  // immediate turn's stream is gone; resume a stream on admission
+                  // and retire it on settlement.
+                  onQueuedFollowupAdmitted: startQueuedLiveStream,
+                  onQueuedFollowupSettled: retireDraftStream,
                   onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
                   onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
                   onReasoningStream: (payload) =>
@@ -634,17 +673,10 @@ async function processGoogleChatEvent(
     // A turn can settle without deliver ever running (silent finish, failure, or
     // a reply sent only via a message tool). Stop any still-live draft stream so
     // its delayed-start timer / pending flush cannot PATCH a stale status after
-    // the turn is done, or re-send a placeholder that cleanup just deleted. The
-    // final delivery clears draftStream itself, so a promoted visible answer is
-    // never clobbered here.
-    if (draftStream) {
-      try {
-        await draftStream.stop();
-      } catch (err) {
-        runtime.error?.(`googlechat: failed stopping draft stream at settlement: ${String(err)}`);
-      }
-      draftStream = undefined;
-    }
+    // the turn is done. The final delivery clears draftStream itself, so a
+    // promoted visible answer is never clobbered here. A deferred turn keeps its
+    // placeholder: the queued followup resumes on it.
+    await retireDraftStream();
     if (!deferred) {
       await cleanupTypingMessage();
     }
