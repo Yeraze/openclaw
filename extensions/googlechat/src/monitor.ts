@@ -439,6 +439,54 @@ async function processMessageWithPipeline(params: {
     }
   }
 
+  // A queued followup drains this invocation's retained progress callbacks, but by
+  // the time it runs the immediate turn's draft stream is already stopped. Send a
+  // fresh placeholder and stream so live progress resumes for the queued turn.
+  const startQueuedLiveStream = async (): Promise<void> => {
+    if (typingIndicator !== "live" || draftStream) {
+      return;
+    }
+    try {
+      const result = await sendGoogleChatMessage({
+        account,
+        space: spaceId,
+        text: `_${botName} is typing..._`,
+        thread: typingMessageThreadName,
+      });
+      if (result?.messageName) {
+        typingMessage = createGoogleChatTypingMessage({
+          messageName: result.messageName,
+          requestedThreadName: typingMessageThreadName,
+          deliveredThreadName: result.threadName,
+        });
+        draftStream = createGoogleChatDraftStream({
+          account,
+          spaceId,
+          messageName: result.messageName,
+          threadName: result.threadName ?? typingMessageThreadName,
+          runtime,
+        });
+      }
+    } catch (err) {
+      runtime.error?.(`Failed sending queued-followup typing message: ${String(err)}`);
+    }
+  };
+
+  // Retire the queued turn's stream so a delayed flush cannot PATCH a stale status
+  // after settlement. The queued turn's final delivery already clears draftStream
+  // when it posts a visible answer, so this only covers the silent-finish path.
+  const stopQueuedLiveStream = async (): Promise<void> => {
+    if (!draftStream) {
+      return;
+    }
+    try {
+      await draftStream.stop();
+    } catch (err) {
+      runtime.error?.(`googlechat: failed stopping queued draft stream at settle: ${String(err)}`);
+    }
+    draftStream = undefined;
+  };
+
   const runParams = {
     channel: "googlechat",
     accountId: route.accountId,
@@ -533,7 +581,7 @@ async function processMessageWithPipeline(params: {
           },
         },
         replyPipeline: {},
-        ...(draftStream
+        ...(typingIndicator === "live"
           ? {
               replyOptions: {
                 // Keep core's own standalone tool-progress text messages off (we
@@ -542,6 +590,11 @@ async function processMessageWithPipeline(params: {
                 // onItemEvent reach the draft stream instead of freezing.
                 suppressDefaultToolProgressMessages: true,
                 allowToolLifecycleWhenProgressHidden: true,
+                // A queued followup reuses these retained callbacks after the
+                // immediate turn's stream is gone; re-create a stream on admission
+                // and retire it on settlement so its progress isn't a no-op.
+                onQueuedFollowupAdmitted: startQueuedLiveStream,
+                onQueuedFollowupSettled: stopQueuedLiveStream,
                 onToolStart: (payload: {
                   itemId?: string;
                   toolCallId?: string;
