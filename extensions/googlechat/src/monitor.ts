@@ -386,6 +386,7 @@ async function processGoogleChatEvent(
   // immediate run returned and retired the stream. Resume progress on the
   // placeholder the deferred turn kept, so it is not orphaned beside a second
   // one; post a fresh placeholder only if an earlier answer consumed it.
+  let queuedPlaceholderOwned = false;
   const startQueuedLiveStream = async (): Promise<void> => {
     if (typingIndicator !== "live" || draftStream) {
       return;
@@ -394,6 +395,7 @@ async function processGoogleChatEvent(
       await sendTypingPlaceholder();
     }
     if (typingMessage) {
+      queuedPlaceholderOwned = true;
       startLiveStream(typingMessage);
     }
   };
@@ -410,6 +412,18 @@ async function processGoogleChatEvent(
     } catch (error) {
       runtime.error?.(`Google Chat typing cleanup failed: ${String(error)}`);
     }
+  };
+
+  // Only this monitor's final delivery marks the placeholder done. A queued answer
+  // routed through core's outbound path never reaches it, and settlement cannot
+  // tell that apart from a silent or failed turn, so remove an unused placeholder
+  // instead of leaving a frozen status or claiming a reply below it.
+  const settleQueuedLiveStream = async (): Promise<void> => {
+    if (!queuedPlaceholderOwned) {
+      return;
+    }
+    queuedPlaceholderOwned = false;
+    await cleanupTypingMessage();
   };
   let deferred = false;
   const typingTurnLifecycle: Parameters<
@@ -649,9 +663,9 @@ async function processGoogleChatEvent(
                   allowToolLifecycleWhenProgressHidden: true,
                   // A queued followup reuses these retained callbacks after the
                   // immediate turn's stream is gone; resume a stream on admission
-                  // and retire it on settlement.
+                  // and retire its placeholder on settlement.
                   onQueuedFollowupAdmitted: startQueuedLiveStream,
-                  onQueuedFollowupSettled: retireDraftStream,
+                  onQueuedFollowupSettled: settleQueuedLiveStream,
                   onToolStart: (payload) => draftStream?.pushToolEvent(payload) ?? false,
                   onItemEvent: (payload) => draftStream?.pushItemEvent(payload) ?? false,
                   onReasoningStream: (payload) =>
