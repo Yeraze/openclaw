@@ -218,9 +218,14 @@ export function sidebarPanelDefinitions(
       icons.diff,
       detailContent?.kind === "loading"
         ? renderPanelLoadingSkeleton("review", t("common.loading"))
-        : detailContent && params
-          ? params.renderDetail(detailContent)
-          : null,
+        : detailContent?.kind === "unavailable"
+          ? html`<div class="callout danger review-unavailable" role="alert">
+              <strong>${t("chat.detailPanel.unavailable")}</strong>
+              <span>${detailContent.message}</span>
+            </div>`
+          : detailContent && params
+            ? params.renderDetail(detailContent)
+            : null,
     ),
     definePanel("terminal", "terminal", icons.terminal, terminal),
     definePanel("browser", "browser", icons.globe, browser),
@@ -285,7 +290,7 @@ export function sidebarPanelDefinitions(
     ...[...pluginPanels].map(([slot, entry]): SidebarPanelDefinition => ({
       slot,
       label: entry?.value.label ?? slot.slice("plugin:".length),
-      icon: icons.puzzle,
+      icon: icons.plug,
       available: entry !== undefined,
       content: entry
         ? renderPluginContribution(
