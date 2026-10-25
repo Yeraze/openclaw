@@ -10,6 +10,7 @@ import {
 } from "openclaw/plugin-sdk/channel-outbound";
 import type { StreamingMode } from "openclaw/plugin-sdk/channel-outbound";
 import type { GoogleChatAccountConfig } from "openclaw/plugin-sdk/config-contracts";
+import type { GetReplyOptions } from "openclaw/plugin-sdk/reply-runtime";
 import type { ResolvedGoogleChatAccount } from "./accounts.js";
 import { GoogleChatApiError, sendGoogleChatMessage, updateGoogleChatMessage } from "./api.js";
 
@@ -141,5 +142,65 @@ export function createGoogleChatDraftStream(params: {
     deliveredThreadName: () => deliveredThreadName,
     finalize,
     stop,
+  };
+}
+
+export type GoogleChatLiveStatus = {
+  isActive: () => boolean;
+  /** Start editing the placeholder with live progress. */
+  start: (messageName: string, threadName?: string) => void;
+  /**
+   * Stop progress edits and drain the in-flight one, then report where the stream
+   * last wrote: a 404 re-send may have replaced the placeholder and its thread.
+   */
+  retire: () => Promise<{ messageName: string; threadName?: string } | undefined>;
+  /** Turn callbacks that route progress into whichever stream is active. */
+  replyOptions: Pick<
+    GetReplyOptions,
+    | "suppressDefaultToolProgressMessages"
+    | "allowToolLifecycleWhenProgressHidden"
+    | "onToolStart"
+    | "onItemEvent"
+    | "onReasoningStream"
+  >;
+};
+
+export function createGoogleChatLiveStatus(params: {
+  account: ResolvedGoogleChatAccount;
+  spaceId: string;
+  runtime: { log?: (message: string) => void; error?: (message: string) => void };
+}): GoogleChatLiveStatus {
+  let stream: GoogleChatDraftStream | undefined;
+  return {
+    isActive: () => Boolean(stream),
+    start: (messageName, threadName) => {
+      stream = createGoogleChatDraftStream({ ...params, messageName, threadName });
+    },
+    retire: async () => {
+      const current = stream;
+      if (!current) {
+        return undefined;
+      }
+      stream = undefined;
+      try {
+        await current.stop();
+      } catch (err) {
+        params.runtime.error?.(`googlechat: failed stopping live status stream: ${String(err)}`);
+      }
+      return { messageName: current.messageName(), threadName: current.deliveredThreadName() };
+    },
+    replyOptions: {
+      // Keep core's own standalone tool-progress text messages off (progress
+      // renders into the live placeholder), but still let the tool lifecycle fire
+      // on non-verbose turns so onToolStart/onItemEvent reach the stream.
+      suppressDefaultToolProgressMessages: true,
+      allowToolLifecycleWhenProgressHidden: true,
+      onToolStart: (payload) => stream?.pushToolEvent(payload) ?? false,
+      onItemEvent: (payload) => stream?.pushItemEvent(payload) ?? false,
+      onReasoningStream: (payload) =>
+        stream?.pushReasoningProgress(payload.text || "Thinking…", {
+          snapshot: payload.isReasoningSnapshot === true,
+        }) ?? false,
+    },
   };
 }
